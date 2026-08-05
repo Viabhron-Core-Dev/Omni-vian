@@ -33,11 +33,6 @@ fun OmniRouteApp() {
     ) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            floatingActionButton = {
-                FloatingActionButton(onClick = { LogKeeper.exportAndClear(context) }) {
-                    Icon(Icons.Default.BugReport, contentDescription = "Export Logs")
-                }
-            },
             bottomBar = {
                 FixedBottomNav(
                     currentTab = currentTab,
@@ -46,7 +41,7 @@ fun OmniRouteApp() {
                 )
             }
         ) { innerPadding ->
-            Box(modifier = Modifier.padding(innerPadding)) {
+            Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
                 when (currentTab) {
                     AppTab.CHAT -> ChatScreen(
                         onMenuClick = { scope.launch { drawerState.open() } }
@@ -54,6 +49,16 @@ fun OmniRouteApp() {
                     AppTab.CODE -> CodeScreen(
                         onMenuClick = { scope.launch { drawerState.open() } }
                     )
+                }
+                
+                // FAB placed at the bottom-left corner
+                FloatingActionButton(
+                    onClick = { LogKeeper.exportAndClear(context) },
+                    modifier = Modifier
+                        .align(androidx.compose.ui.Alignment.BottomStart)
+                        .padding(16.dp)
+                ) {
+                    Icon(Icons.Default.BugReport, contentDescription = "Export Logs")
                 }
             }
         }

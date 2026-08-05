@@ -9,16 +9,23 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import com.example.engine.server.PreviewServerManager
+import java.io.File
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CodeScreen(onMenuClick: () -> Unit) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val isServerRunning by PreviewServerManager.isRunning.collectAsState()
 
     // We use LocalLayoutDirection to put the drawer on the right side
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -49,6 +56,18 @@ fun CodeScreen(onMenuClick: () -> Unit) {
                             }
                         },
                         actions = {
+                            IconButton(onClick = {
+                                if (isServerRunning) {
+                                    PreviewServerManager.stop()
+                                } else {
+                                    PreviewServerManager.start(File(context.cacheDir, "workspace"))
+                                }
+                            }) {
+                                Icon(
+                                    if (isServerRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                    contentDescription = if (isServerRunning) "Stop Server" else "Start Server"
+                                )
+                            }
                             IconButton(onClick = { 
                                 scope.launch {
                                     drawerState.open()

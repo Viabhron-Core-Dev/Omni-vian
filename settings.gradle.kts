@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "OmniRoute IDE"
+rootProject.name = "OmniVian"
 
 include(":app")

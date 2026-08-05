@@ -14,7 +14,7 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.omnirouteide.qwxrt"
+    applicationId = "shura.omnivian"
     minSdk = 24
     targetSdk = 36
     versionCode = 1
@@ -115,6 +115,7 @@ dependencies {
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
+  implementation(libs.nanohttpd)
   implementation(libs.okhttp)
   // implementation(libs.play.services.location)
   implementation(libs.retrofit)

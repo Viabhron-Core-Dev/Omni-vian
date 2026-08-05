@@ -7,3 +7,19 @@
 * Verification: local build only (lint and compile).
 * Deviation: Used simple `ModalNavigationDrawer` inside `CodeScreen` with `LocalLayoutDirection` inverted for RTL to position the file tree drawer on the right side.
 * Known issue/Follow-up: File tree uses dummy paths, needs hooking up to local file system in future phases. LogKeeper needs to be integrated into actual engine layers.
+
+2026-08-05T09:36:00-07:00
+* Requested: Fix the Android APK GitHub actions build pipeline failing with AGP version requirements.
+* Files touched: `/.github/workflows/build.yml`
+* Action: Updated the setup-gradle action to v4, set gradle-version to 9.3.1, added `validate-wrappers: false`, and appended a step to upload the built APK as a workflow artifact.
+* Verification: Not tested locally (GitHub Actions fix only).
+* Deviation: None.
+* Known issue/Follow-up: Ensure next workflows run correctly on `main` push.
+
+2026-08-05T09:58:00-07:00
+* Requested: Update app name to OmniVian and implement Google AI Studio chat UI/bottom nav layout.
+* Files touched: `app/src/main/res/values/strings.xml`, `settings.gradle.kts`, `metadata.json`, `app/build.gradle.kts`, `app/src/main/java/com/example/ui/bottomnav/FixedBottomNav.kt`, `app/src/main/java/com/example/ui/chat/ChatScreen.kt`
+* Action: Updated app ID to `shura.omnivian` and names to `OmniVian`. Rewrote the bottom navigation to be a full-width Surface with a centered pill-shaped tab selector. Updated ChatScreen to include a rounded Surface input box (with no microphone icon) and Google AI Studio style message bubbles.
+* Verification: local build only.
+* Deviation: None.
+* Known issue/Follow-up: Log Keeper UI will be built in a later phase as confirmed.

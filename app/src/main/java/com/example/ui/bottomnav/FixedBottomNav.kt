@@ -1,18 +1,23 @@
 package com.example.ui.bottomnav
 
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 enum class AppTab {
@@ -25,28 +30,62 @@ fun FixedBottomNav(
     onTabSelected: (AppTab) -> Unit,
     onMoreClick: () -> Unit
 ) {
-    NavigationBar(
-        modifier = Modifier
-            .padding(16.dp)
-            .clip(RoundedCornerShape(32.dp))
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 3.dp
     ) {
-        NavigationBarItem(
-            selected = currentTab == AppTab.CHAT,
-            onClick = { onTabSelected(AppTab.CHAT) },
-            icon = { Icon(Icons.Default.Chat, contentDescription = "Chat") },
-            label = { Text("Chat") }
-        )
-        NavigationBarItem(
-            selected = currentTab == AppTab.CODE,
-            onClick = { onTabSelected(AppTab.CODE) },
-            icon = { Icon(Icons.Default.Code, contentDescription = "Code") },
-            label = { Text("Code") }
-        )
-        NavigationBarItem(
-            selected = false,
-            onClick = onMoreClick,
-            icon = { Icon(Icons.Default.MoreVert, contentDescription = "More") },
-            label = { Text("More") }
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Placeholder for left alignment to center the toggle
+            Spacer(modifier = Modifier.width(48.dp))
+            
+            // Pill shaped toggle
+            Row(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TabButton(
+                    text = "Chat",
+                    isSelected = currentTab == AppTab.CHAT,
+                    onClick = { onTabSelected(AppTab.CHAT) }
+                )
+                TabButton(
+                    text = "Code",
+                    isSelected = currentTab == AppTab.CODE,
+                    onClick = { onTabSelected(AppTab.CODE) }
+                )
+            }
+            
+            // 3 dots menu
+            IconButton(onClick = onMoreClick) {
+                Icon(Icons.Default.MoreVert, contentDescription = "More options")
+            }
+        }
+    }
+}
+
+@Composable
+private fun TabButton(text: String, isSelected: Boolean, onClick: () -> Unit) {
+    val backgroundColor = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
+    val textColor = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
+    
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(backgroundColor)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text = text, color = textColor, style = MaterialTheme.typography.labelLarge)
     }
 }

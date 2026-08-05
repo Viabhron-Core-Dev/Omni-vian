@@ -1,5 +1,5 @@
 {
-  "name": "OmniRoute IDE",
+  "name": "OmniVian",
   "description": "AI Studio Mobile IDE with OmniRoute capabilities.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
