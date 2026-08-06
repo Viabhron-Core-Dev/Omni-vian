@@ -21,6 +21,7 @@ import com.example.ui.code.CodeScreen
 import com.example.ui.sidebar.GlobalSidebar
 import com.example.ui.settings.GlobalSettingsScreen
 import com.example.ui.settings.ThreadSettingsScreen
+import com.example.ui.settings.LogKeeperScreen
 import com.example.utils.LogKeeper
 import kotlinx.coroutines.launch
 
@@ -70,7 +71,7 @@ fun OmniRouteApp() {
                         }
                         
                         FloatingActionButton(
-                            onClick = { LogKeeper.exportAndClear(context) },
+                            onClick = { navController.navigate("log_keeper") },
                             modifier = Modifier
                                 .align(androidx.compose.ui.Alignment.BottomStart)
                                 .padding(16.dp)
@@ -106,6 +107,11 @@ fun OmniRouteApp() {
                 )
             }
 
+            composable("log_keeper") {
+                LogKeeperScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
             composable("settings") {
                 GlobalSettingsScreen(
                     onNavigateBack = { navController.popBackStack() },

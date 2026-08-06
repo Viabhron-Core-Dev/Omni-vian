@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -58,6 +59,7 @@ fun GlobalSettingsScreen(
                 SettingsItem("Permissions", "System permissions used", Icons.Default.Security) { onNavigateTo("settings/permissions") }
                 SettingsItem("Font & Typography", "App-wide font settings", Icons.Default.FontDownload) { onNavigateTo("settings/font") }
                 SettingsItem("OmniRoute", "Local proxy settings", Icons.Default.Router) { onNavigateTo("settings/omniroute") }
+                SettingsItem("Log Keeper", "View and export app logs", Icons.Default.BugReport) { onNavigateTo("settings/log_keeper") }
             }
         }
     }
