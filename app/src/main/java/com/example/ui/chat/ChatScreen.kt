@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -17,6 +18,9 @@ import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,8 +28,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import com.example.engine.server.PreviewServerManager
 import java.io.File
+import java.util.UUID
+
+enum class MessageRole {
+    USER, AI, APP_ACTION
+}
+
+data class ChatMessage(
+    val id: String = UUID.randomUUID().toString(),
+    val text: String = "",
+    val role: MessageRole = MessageRole.USER,
+    val editedFiles: List<Pair<String, Boolean>> = emptyList(),
+    val appActions: List<String> = emptyList()
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,15 +52,56 @@ fun ChatScreen(
 ) {
     var inputText by remember { mutableStateOf("") }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val isServerRunning by PreviewServerManager.isRunning.collectAsState()
 
+    var showAgentSettings by remember { mutableStateOf(false) }
+    var showAttachmentPicker by remember { mutableStateOf(false) }
+    var selectedFile by remember { mutableStateOf<String?>(null) }
+    var showArtifactsList by remember { mutableStateOf(false) }
+    
+    val chatMessages = remember {
+        mutableStateListOf(
+            ChatMessage(
+                text = "github/workflows/build.yml\nShow file in chat reply. Full file in codeblock. just discuss no coding or building or updating blueprint.",
+                role = MessageRole.USER
+            ),
+            ChatMessage(
+                role = MessageRole.APP_ACTION,
+                appActions = listOf(
+                    "Searched Workspace for 'build.yml'",
+                    "Read github/workflows/build.yml",
+                    "Checked Gradle configuration"
+                ),
+                editedFiles = listOf(
+                    "BLUEPRINT.md" to true,
+                    "app/src/main/java/com/example/engine/tool..." to true,
+                    "app/src/main/java/com/example/engine/setti..." to true,
+                    "app/src/main/java/com/example/engine/setti..." to true
+                )
+            ),
+            ChatMessage(
+                text = "I've reviewed the file. The workflow uses setup-gradle@v4 which is correct. I'll make the updates you requested.",
+                role = MessageRole.AI
+            )
+        )
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
+
         TopAppBar(
             title = { 
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clickable { showAgentSettings = true }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
                     Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(8.dp))
                     Text("Untitled", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Agent Settings", modifier = Modifier.size(16.dp))
                 }
             },
             navigationIcon = {
@@ -51,32 +110,57 @@ fun ChatScreen(
                 }
             },
             actions = {
+                var showMenu by remember { mutableStateOf(false) }
+
                 IconButton(onClick = {
-                    if (isServerRunning) {
-                        PreviewServerManager.stop()
-                    } else {
-                        // Using cache dir as dummy workspace root for now
-                        PreviewServerManager.start(File(context.cacheDir, "workspace"))
-                    }
+                    showArtifactsList = true
                 }) {
                     Icon(
-                        if (isServerRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
-                        contentDescription = if (isServerRunning) "Stop Server" else "Start Server"
+                        Icons.Default.Code,
+                        contentDescription = "Artifacts"
+                    )
+                }
+                
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "More Options")
+                }
+                
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Rename Chat") },
+                        onClick = { showMenu = false }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Archive Chat") },
+                        onClick = { showMenu = false }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Delete Chat", color = MaterialTheme.colorScheme.error) },
+                        onClick = { showMenu = false }
                     )
                 }
             }
         )
         
+        TokenUsageBar(usedTokens = 45000, maxTokens = 128000)
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            item {
-                UserMessage(text = "github/workflows/build.yml\nShow file in chat reply. Full file in codeblock. just discuss no coding or building or updating blueprint.")
-            }
-            item {
-                AiMessage(text = "I've reviewed the file. The workflow uses setup-gradle@v4 which is correct. I'll make the updates you requested.", hasActionHistory = true)
+            items(chatMessages, key = { it.id }) { message ->
+                when (message.role) {
+                    MessageRole.USER -> UserMessage(text = message.text)
+                    MessageRole.AI -> AiMessage(text = message.text)
+                    MessageRole.APP_ACTION -> AppActionMessage(
+                        editedFiles = message.editedFiles,
+                        appActions = message.appActions,
+                        onFileClick = { selectedFile = it }
+                    )
+                }
             }
         }
 
@@ -134,7 +218,7 @@ fun ChatScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         FilledIconButton(
-                            onClick = { /* Add Attachment */ },
+                            onClick = { showAttachmentPicker = true },
                             colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.surface
                             ),
@@ -144,7 +228,12 @@ fun ChatScreen(
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         FilledIconButton(
-                            onClick = { /* Send */ },
+                            onClick = {
+                                if (inputText.isNotBlank()) {
+                                    chatMessages.add(ChatMessage(text = inputText, role = MessageRole.USER))
+                                    inputText = ""
+                                }
+                            },
                             colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.surface
                             ),
@@ -155,6 +244,88 @@ fun ChatScreen(
                     }
                 }
             }
+        }
+        
+        if (showAgentSettings) {
+            AgentSettingsBottomSheet(
+                onDismiss = { showAgentSettings = false }
+            )
+        }
+        
+        selectedFile?.let { fileName ->
+            FileAttachmentBottomSheet(
+                fileName = fileName,
+                onDismiss = { selectedFile = null }
+            )
+        }
+        
+        var selectedArtifact by remember { mutableStateOf<ArtifactItem?>(null) }
+        
+        if (showArtifactsList) {
+            ArtifactsListBottomSheet(
+                onDismiss = { showArtifactsList = false },
+                onArtifactSelected = { artifact ->
+                    selectedArtifact = artifact
+                    showArtifactsList = false
+                }
+            )
+        }
+        
+        selectedArtifact?.let { artifact ->
+            PWAPreviewBottomSheet(
+                url = artifact.url,
+                title = artifact.name,
+                onDismiss = { selectedArtifact = null }
+            )
+        }
+
+        if (showAttachmentPicker) {
+            AttachmentPickerBottomSheet(
+                onDismiss = { showAttachmentPicker = false },
+                onOptionSelected = { option ->
+                    // Handle attachment logic here
+                    when(option) {
+                        is AttachmentOption.ImageUri -> {
+                            chatMessages.add(ChatMessage(text = "Selected image: ${option.uri}", role = MessageRole.USER))
+                        }
+                        is AttachmentOption.FileUri -> {
+                            chatMessages.add(ChatMessage(text = "Selected file: ${option.uri}", role = MessageRole.USER))
+                            scope.launch {
+                                val result = com.example.engine.fs.TextExtractor.extractTextFromUri(context, option.uri)
+                                if (result.isSuccess) {
+                                    val text = result.getOrNull()
+                                    chatMessages.add(ChatMessage(text = "File content extracted (${text?.length} chars)", role = MessageRole.APP_ACTION))
+                                } else {
+                                    chatMessages.add(ChatMessage(text = "Failed to extract text", role = MessageRole.APP_ACTION))
+                                }
+                            }
+                        }
+                        is AttachmentOption.GithubRepo -> {
+                            chatMessages.add(ChatMessage(text = "Importing repo: ${option.url} ...", role = MessageRole.USER))
+                            scope.launch {
+                                val repoName = option.url.trim().removeSuffix("/").substringAfterLast("/")
+                                val destFolder = java.io.File(com.example.engine.fs.LocalFileManager.getWorkspaceDir(), repoName)
+                                val destZip = java.io.File(com.example.engine.fs.LocalFileManager.getWorkspaceDir(), "$repoName.zip")
+                                val result = com.example.engine.fs.GithubDownloader.downloadRepoAsZip(option.url, destZip)
+                                if (result.isSuccess) {
+                                    com.example.engine.fs.LocalFileManager.unzipFile(destZip, destFolder)
+                                    destZip.delete()
+                                    chatMessages.add(ChatMessage(text = "Successfully imported GitHub repo '$repoName' into workspace.", role = MessageRole.APP_ACTION))
+                                } else {
+                                    chatMessages.add(ChatMessage(text = "Failed to import repo: ${result.exceptionOrNull()?.message}", role = MessageRole.APP_ACTION))
+                                }
+                            }
+                        }
+                        is AttachmentOption.Workspace -> {
+                            chatMessages.add(ChatMessage(text = "Workspace artifacts picker triggered", role = MessageRole.USER))
+                        }
+                        is AttachmentOption.GoogleDrive -> {
+                            chatMessages.add(ChatMessage(text = "Google Drive picker triggered", role = MessageRole.USER))
+                        }
+                    }
+                    showAttachmentPicker = false
+                }
+            )
         }
     }
 }
@@ -181,7 +352,7 @@ fun UserMessage(text: String) {
 }
 
 @Composable
-fun AiMessage(text: String, hasActionHistory: Boolean = false) {
+fun AiMessage(text: String) {
     Column(modifier = Modifier.fillMaxWidth().padding(end = 32.dp, start = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
@@ -190,26 +361,51 @@ fun AiMessage(text: String, hasActionHistory: Boolean = false) {
         }
         Spacer(modifier = Modifier.height(8.dp))
         
-        if (hasActionHistory) {
-            ActionHistoryCard(
-                editedFiles = listOf(
-                    "BLUEPRINT.md" to true,
-                    "app/src/main/java/com/example/engine/tool..." to true,
-                    "app/src/main/java/com/example/engine/setti..." to true,
-                    "app/src/main/java/com/example/engine/setti..." to true
-                )
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-        }
-        
         Text(text = text, style = MaterialTheme.typography.bodyLarge)
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Restore,
+                contentDescription = "Revert",
+                modifier = Modifier.size(20.dp).clickable { /* TODO: Revert */ },
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Icon(
+                imageVector = Icons.Default.Code,
+                contentDescription = "Diff",
+                modifier = Modifier.size(20.dp).clickable { /* TODO: Diff */ },
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun AppActionMessage(
+    editedFiles: List<Pair<String, Boolean>> = emptyList(),
+    appActions: List<String> = emptyList(),
+    onFileClick: (String) -> Unit = {}
+) {
+    Box(modifier = Modifier.fillMaxWidth().padding(end = 32.dp, start = 8.dp)) {
+        ActionHistoryCard(
+            editedFiles = editedFiles,
+            appActions = appActions,
+            onFileClick = onFileClick
+        )
     }
 }
 
 @Composable
 fun ActionHistoryCard(
     modifier: Modifier = Modifier,
-    editedFiles: List<Pair<String, Boolean>> = emptyList()
+    editedFiles: List<Pair<String, Boolean>> = emptyList(),
+    appActions: List<String> = emptyList(),
+    onFileClick: (String) -> Unit = {}
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -228,7 +424,7 @@ fun ActionHistoryCard(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Action history",
+                    text = "App Action Log",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -236,15 +432,26 @@ fun ActionHistoryCard(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            Text(
-                text = "Here are key actions taken for the app:",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (appActions.isNotEmpty()) {
+                appActions.forEach { action ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    ) {
+                        Box(modifier = Modifier.size(4.dp).background(MaterialTheme.colorScheme.onSurfaceVariant, RoundedCornerShape(2.dp)))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = action,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
             
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // Edit section header
+            if (editedFiles.isNotEmpty()) {
+                // Edit section header
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Default.Edit,
@@ -267,6 +474,7 @@ fun ActionHistoryCard(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .clickable { onFileClick(fileName) }
                         .padding(vertical = 4.dp, horizontal = 24.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -297,6 +505,35 @@ fun ActionHistoryCard(
                     }
                 }
             }
+            }
         }
+    }
+}
+
+@Composable
+fun TokenUsageBar(usedTokens: Int, maxTokens: Int) {
+    val progress = usedTokens.toFloat() / maxTokens.toFloat()
+    val isWarning = progress > 0.8f
+    
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier.weight(1f).height(4.dp),
+            color = if (isWarning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = "$usedTokens / $maxTokens Tokens",
+            style = MaterialTheme.typography.labelSmall,
+            color = if (isWarning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

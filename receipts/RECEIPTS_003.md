@@ -38,3 +38,19 @@
 * Verification: local build only (lint and compile).
 * Deviation: None.
 * Known issue/Follow-up: The model picker pill is currently static and needs to be connected to actual model selection logic in Phase 5.
+
+2026-08-05T10:47:00-07:00
+* Requested: Rearrange blueprint order so that all UI shell structure (settings pages, code editor, file explorer) comes before Agent, Sync, and OmniRoute Logic.
+* Files touched: `BLUEPRINT.md`
+* Action: Swapped Phase 4 and Phase 5 in `BLUEPRINT.md`. Phase 4 is now Global Library and Thread Settings UI, and Phase 5 is Agent Logic, Diff Parsing, and OmniRoute Integration.
+* Verification: Not tested (blueprint update only).
+* Deviation: None.
+* Known issue/Follow-up: Need to continue executing Phase 3 and Phase 4 UI work.
+
+2026-08-05T10:52:00-07:00
+* Requested: Further divide the development phases to ensure UI shell structure (chat, code editor, global settings, thread settings) is built first before any logic or integrations.
+* Files touched: `BLUEPRINT.md`
+* Action: Restructured the development phases. Phase 3 is now Chat Interface. Phase 4 is Code Editor and File Explorer. Phase 5 is Global Library Settings. Phase 6 is Thread Settings. Phase 7 is OmniRoute Integration. Phase 8 is Agent Logic. Phase 9 is Antigravity Orchestrator. Phases 10 and 11 cover cloud capabilities and Design Studio.
+* Verification: Not tested (blueprint update only).
+* Deviation: None.
+* Known issue/Follow-up: Proceed with executing Phase 3 (Chat UI polishing).
