@@ -230,8 +230,22 @@ fun ChatScreen(
                         FilledIconButton(
                             onClick = {
                                 if (inputText.isNotBlank()) {
-                                    chatMessages.add(ChatMessage(text = inputText, role = MessageRole.USER))
+                                    val prompt = inputText
+                                    chatMessages.add(ChatMessage(text = prompt, role = MessageRole.USER))
                                     inputText = ""
+                                    
+                                    val generatingMessage = ChatMessage(text = "Thinking...", role = MessageRole.AI)
+                                    chatMessages.add(generatingMessage)
+                                    
+                                    scope.launch {
+                                        val response = com.example.ui.chat.GeminiClient.generateContent(prompt)
+                                        val index = chatMessages.indexOf(generatingMessage)
+                                        if (index != -1) {
+                                            chatMessages[index] = generatingMessage.copy(text = response)
+                                        } else {
+                                            chatMessages.add(ChatMessage(text = response, role = MessageRole.AI))
+                                        }
+                                    }
                                 }
                             },
                             colors = IconButtonDefaults.filledIconButtonColors(
