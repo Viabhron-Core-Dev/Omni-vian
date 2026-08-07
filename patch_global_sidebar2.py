@@ -1,4 +1,10 @@
-package com.example.ui.sidebar
+import re
+
+with open('app/src/main/java/com/example/ui/sidebar/GlobalSidebar.kt', 'r') as f:
+    content = f.read()
+
+# Replace GlobalSidebar
+new_content = """package com.example.ui.sidebar
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,7 +27,6 @@ import com.example.engine.fs.LocalFileManager
 import java.io.File
 import androidx.compose.ui.Alignment
 
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun GlobalSidebar(
     onClose: () -> Unit, 
@@ -30,7 +35,6 @@ fun GlobalSidebar(
     currentChatId: String,
     onChatSelected: (String) -> Unit = {}
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
     var workspaces by remember { mutableStateOf(emptyList<File>()) }
     
     LaunchedEffect(currentChatId, onClose) { // Trigger reload when sidebar opens or chat changes
@@ -54,10 +58,7 @@ fun GlobalSidebar(
             icon = { Icon(Icons.Default.Code, contentDescription = null) },
             label = { Text("Artifacts") },
             selected = false,
-            onClick = { 
-                android.widget.Toast.makeText(context, "Artifacts list is managed in Chat", android.widget.Toast.LENGTH_SHORT).show()
-                onClose()
-            },
+            onClick = { /* TODO: Artifacts */ onClose() },
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
         )
         
@@ -65,10 +66,7 @@ fun GlobalSidebar(
             icon = { Icon(Icons.Default.DesignServices, contentDescription = null) },
             label = { Text("Design") },
             selected = false,
-            onClick = { 
-                android.widget.Toast.makeText(context, "Design Studio coming soon", android.widget.Toast.LENGTH_SHORT).show()
-                onClose()
-            },
+            onClick = { /* TODO: Design Studio */ onClose() },
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
         )
         
@@ -76,10 +74,7 @@ fun GlobalSidebar(
             icon = { Icon(Icons.Default.Cloud, contentDescription = null) },
             label = { Text("Library") },
             selected = false,
-            onClick = { 
-                android.widget.Toast.makeText(context, "Component Library coming soon", android.widget.Toast.LENGTH_SHORT).show()
-                onClose()
-            },
+            onClick = { /* TODO: Library */ onClose() },
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
         )
         
@@ -98,15 +93,7 @@ fun GlobalSidebar(
                     },
                     onDelete = {
                         LocalFileManager.deleteWorkspace(workspace.name)
-                        val remaining = LocalFileManager.getWorkspaces()
-                        workspaces = remaining
-                        if (workspace.name == currentChatId) {
-                            if (remaining.isNotEmpty()) {
-                                onChatSelected(remaining.first().name)
-                            } else {
-                                onNewChat()
-                            }
-                        }
+                        workspaces = LocalFileManager.getWorkspaces()
                     }
                 )
             }
@@ -130,10 +117,9 @@ fun ChatSidebarItem(
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
     var showRename by remember { mutableStateOf(false) }
-    var chatName by remember { mutableStateOf(LocalFileManager.getWorkspaceName(workspace.name)) }
+    var chatName by remember { mutableStateOf(workspace.name) } // TODO: Read from metadata in the future
 
     NavigationDrawerItem(
         icon = { Icon(Icons.Default.Folder, contentDescription = null) },
@@ -156,10 +142,7 @@ fun ChatSidebarItem(
                     )
                     DropdownMenuItem(
                         text = { Text("Archive (GDrive)") },
-                        onClick = { 
-                            showMenu = false
-                            android.widget.Toast.makeText(context, "Archive requires Google Drive integration", android.widget.Toast.LENGTH_SHORT).show()
-                        }
+                        onClick = { showMenu = false; /* TODO */ }
                     )
                     DropdownMenuItem(
                         text = { Text("Delete") },
@@ -185,7 +168,7 @@ fun ChatSidebarItem(
             confirmButton = {
                 TextButton(onClick = { 
                     chatName = newName
-                    LocalFileManager.setWorkspaceName(workspace.name, newName)
+                    // In a real implementation we would save this name to a metadata file in the workspace
                     showRename = false 
                 }) {
                     Text("Rename")
@@ -199,3 +182,8 @@ fun ChatSidebarItem(
         )
     }
 }
+"""
+
+with open('app/src/main/java/com/example/ui/sidebar/GlobalSidebar.kt', 'w') as f:
+    f.write(new_content)
+

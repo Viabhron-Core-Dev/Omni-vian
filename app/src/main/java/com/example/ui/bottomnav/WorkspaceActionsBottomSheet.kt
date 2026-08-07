@@ -20,8 +20,10 @@ import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WorkspaceActionsBottomSheet(onDismiss: () -> Unit, onExportClick: () -> Unit = {}, onThreadSettingsClick: () -> Unit = {}) {
+fun WorkspaceActionsBottomSheet(onDismiss: () -> Unit, onExportClick: () -> Unit = {}, onZipExportClick: () -> Unit = {}, onThreadSettingsClick: () -> Unit = {}) {
     var showExportOptions by remember { mutableStateOf(false) }
+    var showRemixDialog by remember { mutableStateOf(false) }
+    var showOmniRouteDialog by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
     
     ModalBottomSheet(
@@ -52,17 +54,44 @@ fun WorkspaceActionsBottomSheet(onDismiss: () -> Unit, onExportClick: () -> Unit
                 ActionGridItem(
                     icon = Icons.AutoMirrored.Filled.OpenInNew,
                     label = "Remix",
-                    onClick = { /* TODO: Remix */ onDismiss() },
+                    onClick = { showRemixDialog = true },
                     modifier = Modifier.size(80.dp)
                 )
                 ActionGridItem(
                     icon = Icons.Default.Dashboard,
                     label = "OmniRoute Dashboard",
-                    onClick = { /* TODO: OmniRoute Dashboard */ onDismiss() },
+                    onClick = { showOmniRouteDialog = true },
                     modifier = Modifier.size(80.dp)
                 )
             }
         }
+
+    if (showRemixDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showRemixDialog = false },
+            title = { Text("Remix Workspace") },
+            text = { Text("This will copy the repository and all integrations (agents, skills, settings) into a new workspace, clearing chat history. (Feature coming soon)") },
+            confirmButton = {
+                TextButton(onClick = { showRemixDialog = false; onDismiss() }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
+    if (showOmniRouteDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showOmniRouteDialog = false },
+            title = { Text("OmniRoute Dashboard") },
+            text = { Text("This will open the integrated proxy web interface for local AI models and routing. (Feature pending OmniRoute proxy integration)") },
+            confirmButton = {
+                TextButton(onClick = { showOmniRouteDialog = false; onDismiss() }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
     if (showExportOptions) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showExportOptions = false },

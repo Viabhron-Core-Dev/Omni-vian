@@ -14,16 +14,64 @@ object LocalFileManager {
     private val _fileTreeState = MutableStateFlow<FileNode?>(null)
     val fileTreeState: StateFlow<FileNode?> = _fileTreeState.asStateFlow()
 
+
+    private var baseDir: File? = null
+
     fun init(context: Context) {
-        if (workspaceDir == null) {
-            val dir = File(context.filesDir, "workspace")
-            if (!dir.exists()) {
-                dir.mkdirs()
+        if (baseDir == null) {
+            baseDir = context.filesDir
+            val defaultWorkspace = File(baseDir, "workspaces/default")
+            if (!defaultWorkspace.exists()) {
+                defaultWorkspace.mkdirs()
             }
-            workspaceDir = dir
+            workspaceDir = defaultWorkspace
             refreshFileTree()
         }
     }
+
+    fun switchWorkspace(workspaceId: String) {
+        val dir = File(baseDir, "workspaces/$workspaceId")
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+        workspaceDir = dir
+        refreshFileTree()
+    }
+
+    
+    fun getWorkspaceName(workspaceId: String): String {
+        val dir = File(baseDir, "workspaces/$workspaceId")
+        if (!dir.exists()) return workspaceId
+        val nameFile = File(dir, ".workspace_name")
+        if (nameFile.exists()) {
+            return nameFile.readText().trim()
+        }
+        return workspaceId
+    }
+
+    fun setWorkspaceName(workspaceId: String, name: String) {
+        val dir = File(baseDir, "workspaces/$workspaceId")
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+        val nameFile = File(dir, ".workspace_name")
+        nameFile.writeText(name)
+    }
+
+    fun getWorkspaces(): List<File> {
+        val workspacesDir = File(baseDir, "workspaces")
+        if (!workspacesDir.exists()) return emptyList()
+        return workspacesDir.listFiles()?.filter { it.isDirectory }?.sortedByDescending { it.lastModified() } ?: emptyList()
+    }
+    
+    fun deleteWorkspace(workspaceId: String): Boolean {
+        val dir = File(baseDir, "workspaces/$workspaceId")
+        if (dir.exists() && dir.absolutePath != workspaceDir?.absolutePath) {
+            return dir.deleteRecursively()
+        }
+        return false
+    }
+
 
     fun getWorkspaceDir(): File {
         return workspaceDir ?: throw IllegalStateException("LocalFileManager not initialized")

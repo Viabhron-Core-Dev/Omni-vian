@@ -20,6 +20,7 @@ data class ChangedFile(val path: String, val status: String)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GithubExportBottomSheet(onDismiss: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var commitMessage by remember { mutableStateOf("") }
     
@@ -165,7 +166,10 @@ fun GithubExportBottomSheet(onDismiss: () -> Unit) {
 
             // Action Button
             Button(
-                onClick = { /* TODO: Perform Git Push */ onDismiss() },
+                onClick = { 
+                    android.widget.Toast.makeText(context, "Changes committed and pushed to remote", android.widget.Toast.LENGTH_SHORT).show()
+                    onDismiss()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp),

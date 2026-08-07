@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
@@ -21,11 +22,16 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -50,6 +56,7 @@ data class ChatMessage(
 fun ChatScreen(
     onMenuClick: () -> Unit
 ) {
+    val workspaceName = remember { mutableStateOf(com.example.engine.fs.LocalFileManager.getWorkspaceName(com.example.engine.fs.LocalFileManager.getWorkspaceDir().name)) }
     var inputText by remember { mutableStateOf("") }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -59,6 +66,8 @@ fun ChatScreen(
     var showAttachmentPicker by remember { mutableStateOf(false) }
     var selectedFile by remember { mutableStateOf<String?>(null) }
     var showArtifactsList by remember { mutableStateOf(false) }
+    var isGenerating by remember { mutableStateOf(false) }
+    var currentJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     
     val chatMessages = remember {
         mutableStateListOf(
@@ -99,7 +108,7 @@ fun ChatScreen(
                 ) {
                     Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(8.dp))
-                    Text("Untitled", style = MaterialTheme.typography.titleMedium)
+                    Text(workspaceName.value, style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.width(4.dp))
                     Icon(Icons.Default.ArrowDropDown, contentDescription = "Agent Settings", modifier = Modifier.size(16.dp))
                 }
@@ -229,7 +238,10 @@ fun ChatScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         FilledIconButton(
                             onClick = {
-                                if (inputText.isNotBlank()) {
+                                if (isGenerating) {
+                                    currentJob?.cancel()
+                                    isGenerating = false
+                                } else if (inputText.isNotBlank()) {
                                     val prompt = inputText
                                     chatMessages.add(ChatMessage(text = prompt, role = MessageRole.USER))
                                     inputText = ""
@@ -237,23 +249,47 @@ fun ChatScreen(
                                     val generatingMessage = ChatMessage(text = "Thinking...", role = MessageRole.AI)
                                     chatMessages.add(generatingMessage)
                                     
-                                    scope.launch {
-                                        val response = com.example.ui.chat.GeminiClient.generateContent(prompt)
-                                        val index = chatMessages.indexOf(generatingMessage)
-                                        if (index != -1) {
-                                            chatMessages[index] = generatingMessage.copy(text = response)
-                                        } else {
-                                            chatMessages.add(ChatMessage(text = response, role = MessageRole.AI))
+                                    isGenerating = true
+                                    currentJob = scope.launch {
+                                        try {
+                                            val response = com.example.ui.chat.OmniRouteClient.generateContent(chatMessages.filter { it.id != generatingMessage.id })
+                                            val index = chatMessages.indexOf(generatingMessage)
+                                            if (index != -1) {
+                                                chatMessages.removeAt(index)
+                                            }
+                                            
+                                            if (response.actions.isNotEmpty() || response.editedFiles.isNotEmpty()) {
+                                                chatMessages.add(ChatMessage(
+                                                    text = "", 
+                                                    role = MessageRole.APP_ACTION,
+                                                    appActions = response.actions,
+                                                    editedFiles = response.editedFiles
+                                                ))
+                                            }
+                                            if (!response.text.isNullOrBlank()) {
+                                                chatMessages.add(ChatMessage(text = response.text, role = MessageRole.AI))
+                                            }
+                                        } catch (e: kotlinx.coroutines.CancellationException) {
+                                            val index = chatMessages.indexOf(generatingMessage)
+                                            if (index != -1) {
+                                                chatMessages[index] = generatingMessage.copy(text = "Generation stopped.")
+                                            }
+                                        } finally {
+                                            isGenerating = false
                                         }
                                     }
                                 }
                             },
                             colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surface
+                                containerColor = if (isGenerating) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
                             ),
                             modifier = Modifier.size(40.dp)
                         ) {
-                            Icon(Icons.Default.ArrowUpward, contentDescription = "Send")
+                            if (isGenerating) {
+                                Icon(Icons.Default.Stop, contentDescription = "Stop", tint = MaterialTheme.colorScheme.error)
+                            } else {
+                                Icon(Icons.Default.ArrowUpward, contentDescription = "Send")
+                            }
                         }
                     }
                 }
@@ -367,6 +403,7 @@ fun UserMessage(text: String) {
 
 @Composable
 fun AiMessage(text: String) {
+    val context = LocalContext.current
     Column(modifier = Modifier.fillMaxWidth().padding(end = 32.dp, start = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
@@ -385,20 +422,30 @@ fun AiMessage(text: String) {
             Icon(
                 imageVector = Icons.Default.Restore,
                 contentDescription = "Revert",
-                modifier = Modifier.size(20.dp).clickable { /* TODO: Revert */ },
+                modifier = Modifier.size(20.dp).clickable { android.widget.Toast.makeText(context, "Revert action placeholder", android.widget.Toast.LENGTH_SHORT).show() },
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.width(16.dp))
             Icon(
                 imageVector = Icons.Default.Code,
                 contentDescription = "Diff",
-                modifier = Modifier.size(20.dp).clickable { /* TODO: Diff */ },
+                modifier = Modifier.size(20.dp).clickable { android.widget.Toast.makeText(context, "Diff viewer placeholder", android.widget.Toast.LENGTH_SHORT).show() },
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Icon(
+                imageVector = Icons.Default.ContentCopy,
+                contentDescription = "Copy",
+                modifier = Modifier.size(20.dp).clickable {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("AI Message", text))
+                    Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                },
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
 }
-
 @Composable
 fun AppActionMessage(
     editedFiles: List<Pair<String, Boolean>> = emptyList(),
