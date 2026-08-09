@@ -15,7 +15,11 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.List
+
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -34,6 +38,10 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.first
+import com.example.engine.db.AppDatabase
+import com.example.engine.db.toEntity
+import com.example.engine.db.toDomainModel
 import kotlinx.coroutines.launch
 import com.example.engine.server.PreviewServerManager
 import java.io.File
@@ -54,6 +62,7 @@ data class ChatMessage(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
+    sessionId: String,
     onMenuClick: () -> Unit
 ) {
     val workspaceName = remember { mutableStateOf(com.example.engine.fs.LocalFileManager.getWorkspaceName(com.example.engine.fs.LocalFileManager.getWorkspaceDir().name)) }
@@ -63,6 +72,7 @@ fun ChatScreen(
     val isServerRunning by PreviewServerManager.isRunning.collectAsState()
 
     var showAgentSettings by remember { mutableStateOf(false) }
+    var showTokenPanel by remember { mutableStateOf(false) }
     var showAttachmentPicker by remember { mutableStateOf(false) }
     var selectedFile by remember { mutableStateOf<String?>(null) }
     var showArtifactsList by remember { mutableStateOf(false) }
@@ -70,30 +80,24 @@ fun ChatScreen(
     var currentJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     
     val chatMessages = remember {
-        mutableStateListOf(
-            ChatMessage(
-                text = "github/workflows/build.yml\nShow file in chat reply. Full file in codeblock. just discuss no coding or building or updating blueprint.",
-                role = MessageRole.USER
-            ),
-            ChatMessage(
-                role = MessageRole.APP_ACTION,
-                appActions = listOf(
-                    "Searched Workspace for 'build.yml'",
-                    "Read github/workflows/build.yml",
-                    "Checked Gradle configuration"
-                ),
-                editedFiles = listOf(
-                    "BLUEPRINT.md" to true,
-                    "app/src/main/java/com/example/engine/tool..." to true,
-                    "app/src/main/java/com/example/engine/setti..." to true,
-                    "app/src/main/java/com/example/engine/setti..." to true
-                )
-            ),
-            ChatMessage(
-                text = "I've reviewed the file. The workflow uses setup-gradle@v4 which is correct. I'll make the updates you requested.",
-                role = MessageRole.AI
-            )
-        )
+        mutableStateListOf<ChatMessage>()
+    }
+
+    val db = AppDatabase.getDatabase(context)
+    val dao = db.chatMessageDao()
+    
+    LaunchedEffect(sessionId) {
+        val initialMessages = dao.getMessagesForSession(sessionId).first()
+        chatMessages.clear()
+        chatMessages.addAll(initialMessages.map { it.toDomainModel() })
+    }
+
+
+    
+    fun saveMessage(msg: ChatMessage) {
+        if (msg.text != "Thinking...") {
+            scope.launch { dao.insertMessage(msg.toEntity(sessionId)) }
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -120,6 +124,7 @@ fun ChatScreen(
             },
             actions = {
                 var showMenu by remember { mutableStateOf(false) }
+                var showRename by remember { mutableStateOf(false) }
 
                 IconButton(onClick = {
                     showArtifactsList = true
@@ -139,35 +144,72 @@ fun ChatScreen(
                     onDismissRequest = { showMenu = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Rename Chat") },
-                        onClick = { showMenu = false }
+                        text = { Text("Rename") },
+                        onClick = { showMenu = false; showRename = true }
                     )
                     DropdownMenuItem(
-                        text = { Text("Archive Chat") },
-                        onClick = { showMenu = false }
+                        text = { Text("AI Token Panel") },
+                        onClick = { showMenu = false; showTokenPanel = true }
                     )
                     DropdownMenuItem(
-                        text = { Text("Delete Chat", color = MaterialTheme.colorScheme.error) },
+                        text = { Text("Archive (GDrive)") },
+                        onClick = { 
+                            showMenu = false
+                            android.widget.Toast.makeText(context, "Archive requires Google Drive integration", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Delete") },
                         onClick = { showMenu = false }
+                    )
+                }
+
+                if (showRename) {
+                    var newName by remember { mutableStateOf(workspaceName.value) }
+                    AlertDialog(
+                        onDismissRequest = { showRename = false },
+                        title = { Text("Rename Chat") },
+                        text = { 
+                            OutlinedTextField(
+                                value = newName,
+                                onValueChange = { newName = it },
+                                label = { Text("Chat Name") }
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                workspaceName.value = newName
+                                showRename = false
+                            }) {
+                                Text("Save")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showRename = false }) {
+                                Text("Cancel")
+                            }
+                        }
                     )
                 }
             }
         )
         
-        TokenUsageBar(usedTokens = 45000, maxTokens = 128000)
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            items(chatMessages, key = { it.id }) { message ->
+            items(chatMessages.size, key = { chatMessages[it].id }) { index ->
+                val message = chatMessages[index]
+                val isLastMessage = index == chatMessages.lastIndex
                 when (message.role) {
-                    MessageRole.USER -> UserMessage(text = message.text)
-                    MessageRole.AI -> AiMessage(text = message.text)
+                    MessageRole.USER -> UserMessage(text = message.text, isLastMessage = isLastMessage)
+                    MessageRole.AI -> AiMessage(text = message.text, isLastMessage = isLastMessage)
                     MessageRole.APP_ACTION -> AppActionMessage(
                         editedFiles = message.editedFiles,
                         appActions = message.appActions,
-                        onFileClick = { selectedFile = it }
+                        onFileClick = { selectedFile = it },
+                        isLastMessage = isLastMessage
                     )
                 }
             }
@@ -243,7 +285,9 @@ fun ChatScreen(
                                     isGenerating = false
                                 } else if (inputText.isNotBlank()) {
                                     val prompt = inputText
-                                    chatMessages.add(ChatMessage(text = prompt, role = MessageRole.USER))
+                                    val msg = ChatMessage(text = prompt, role = MessageRole.USER)
+                                    chatMessages.add(msg)
+                                    saveMessage(msg)
                                     inputText = ""
                                     
                                     val generatingMessage = ChatMessage(text = "Thinking...", role = MessageRole.AI)
@@ -259,20 +303,21 @@ fun ChatScreen(
                                             }
                                             
                                             if (response.actions.isNotEmpty() || response.editedFiles.isNotEmpty()) {
-                                                chatMessages.add(ChatMessage(
-                                                    text = "", 
-                                                    role = MessageRole.APP_ACTION,
-                                                    appActions = response.actions,
-                                                    editedFiles = response.editedFiles
-                                                ))
+                                                val msg = ChatMessage(text = "", role = MessageRole.APP_ACTION, appActions = response.actions, editedFiles = response.editedFiles)
+                                                chatMessages.add(msg)
+                                                saveMessage(msg)
                                             }
                                             if (!response.text.isNullOrBlank()) {
-                                                chatMessages.add(ChatMessage(text = response.text, role = MessageRole.AI))
+                                                val msg = ChatMessage(text = response.text, role = MessageRole.AI)
+                                                chatMessages.add(msg)
+                                                saveMessage(msg)
                                             }
                                         } catch (e: kotlinx.coroutines.CancellationException) {
                                             val index = chatMessages.indexOf(generatingMessage)
                                             if (index != -1) {
-                                                chatMessages[index] = generatingMessage.copy(text = "Generation stopped.")
+                                                val msg = generatingMessage.copy(text = "Generation stopped.")
+                                                chatMessages[index] = msg
+                                                saveMessage(msg)
                                             }
                                         } finally {
                                             isGenerating = false
@@ -299,6 +344,12 @@ fun ChatScreen(
         if (showAgentSettings) {
             AgentSettingsBottomSheet(
                 onDismiss = { showAgentSettings = false }
+            )
+        }
+        
+        if (showTokenPanel) {
+            AiTokenPanelBottomSheet(
+                onDismiss = { showTokenPanel = false }
             )
         }
         
@@ -336,22 +387,32 @@ fun ChatScreen(
                     // Handle attachment logic here
                     when(option) {
                         is AttachmentOption.ImageUri -> {
-                            chatMessages.add(ChatMessage(text = "Selected image: ${option.uri}", role = MessageRole.USER))
+                            val msg = ChatMessage(text = "Selected image: ${option.uri}", role = MessageRole.USER)
+                            chatMessages.add(msg)
+                            saveMessage(msg)
                         }
                         is AttachmentOption.FileUri -> {
-                            chatMessages.add(ChatMessage(text = "Selected file: ${option.uri}", role = MessageRole.USER))
+                            val msg = ChatMessage(text = "Selected file: ${option.uri}", role = MessageRole.USER)
+                            chatMessages.add(msg)
+                            saveMessage(msg)
                             scope.launch {
                                 val result = com.example.engine.fs.TextExtractor.extractTextFromUri(context, option.uri)
                                 if (result.isSuccess) {
                                     val text = result.getOrNull()
-                                    chatMessages.add(ChatMessage(text = "File content extracted (${text?.length} chars)", role = MessageRole.APP_ACTION))
+                                    val msg = ChatMessage(text = "File content extracted (${text?.length} chars)", role = MessageRole.APP_ACTION)
+                                    chatMessages.add(msg)
+                                    saveMessage(msg)
                                 } else {
-                                    chatMessages.add(ChatMessage(text = "Failed to extract text", role = MessageRole.APP_ACTION))
+                                    val msg = ChatMessage(text = "Failed to extract text", role = MessageRole.APP_ACTION)
+                                    chatMessages.add(msg)
+                                    saveMessage(msg)
                                 }
                             }
                         }
                         is AttachmentOption.GithubRepo -> {
-                            chatMessages.add(ChatMessage(text = "Importing repo: ${option.url} ...", role = MessageRole.USER))
+                            val msg = ChatMessage(text = "Importing repo: ${option.url} ...", role = MessageRole.USER)
+                            chatMessages.add(msg)
+                            saveMessage(msg)
                             scope.launch {
                                 val repoName = option.url.trim().removeSuffix("/").substringAfterLast("/")
                                 val destFolder = java.io.File(com.example.engine.fs.LocalFileManager.getWorkspaceDir(), repoName)
@@ -360,17 +421,25 @@ fun ChatScreen(
                                 if (result.isSuccess) {
                                     com.example.engine.fs.LocalFileManager.unzipFile(destZip, destFolder)
                                     destZip.delete()
-                                    chatMessages.add(ChatMessage(text = "Successfully imported GitHub repo '$repoName' into workspace.", role = MessageRole.APP_ACTION))
+                                    val msg = ChatMessage(text = "Successfully imported GitHub repo '$repoName' into workspace.", role = MessageRole.APP_ACTION)
+                                    chatMessages.add(msg)
+                                    saveMessage(msg)
                                 } else {
-                                    chatMessages.add(ChatMessage(text = "Failed to import repo: ${result.exceptionOrNull()?.message}", role = MessageRole.APP_ACTION))
+                                    val msg = ChatMessage(text = "Failed to import repo: ${result.exceptionOrNull()?.message}", role = MessageRole.APP_ACTION)
+                                    chatMessages.add(msg)
+                                    saveMessage(msg)
                                 }
                             }
                         }
                         is AttachmentOption.Workspace -> {
-                            chatMessages.add(ChatMessage(text = "Workspace artifacts picker triggered", role = MessageRole.USER))
+                            val msg = ChatMessage(text = "Workspace artifacts picker triggered", role = MessageRole.USER)
+                            chatMessages.add(msg)
+                            saveMessage(msg)
                         }
                         is AttachmentOption.GoogleDrive -> {
-                            chatMessages.add(ChatMessage(text = "Google Drive picker triggered", role = MessageRole.USER))
+                            val msg = ChatMessage(text = "Google Drive picker triggered", role = MessageRole.USER)
+                            chatMessages.add(msg)
+                            saveMessage(msg)
                         }
                     }
                     showAttachmentPicker = false
@@ -381,68 +450,84 @@ fun ChatScreen(
 }
 
 @Composable
-fun UserMessage(text: String) {
-    Box(
+fun UserMessage(text: String, isLastMessage: Boolean = true) {
+    var expanded by remember(isLastMessage) { mutableStateOf(isLastMessage) }
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 32.dp, end = 8.dp)
+            .padding(start = 32.dp, end = 8.dp),
+        horizontalAlignment = Alignment.End
     ) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.align(Alignment.CenterEnd)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable { expanded = !expanded }.padding(4.dp)
         ) {
-            Text(
-                text = text,
-                modifier = Modifier.padding(16.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text("You", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (expanded) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant
+            ) {
+                SelectionContainer {
+                    Text(
+                        text = text,
+                        modifier = Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-fun AiMessage(text: String) {
+fun AiMessage(text: String, isLastMessage: Boolean = true) {
     val context = LocalContext.current
+    var expanded by remember(isLastMessage) { mutableStateOf(isLastMessage) }
     Column(modifier = Modifier.fillMaxWidth().padding(end = 32.dp, start = 8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable { expanded = !expanded }.padding(4.dp)
+        ) {
             Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Gemini Pro Latest • Ran for 10s", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Gemini Pro Latest", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Spacer(modifier = Modifier.height(8.dp))
         
-        Text(text = text, style = MaterialTheme.typography.bodyLarge)
-        
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Restore,
-                contentDescription = "Revert",
-                modifier = Modifier.size(20.dp).clickable { android.widget.Toast.makeText(context, "Revert action placeholder", android.widget.Toast.LENGTH_SHORT).show() },
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Icon(
-                imageVector = Icons.Default.Code,
-                contentDescription = "Diff",
-                modifier = Modifier.size(20.dp).clickable { android.widget.Toast.makeText(context, "Diff viewer placeholder", android.widget.Toast.LENGTH_SHORT).show() },
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Icon(
-                imageVector = Icons.Default.ContentCopy,
-                contentDescription = "Copy",
-                modifier = Modifier.size(20.dp).clickable {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(ClipData.newPlainText("AI Message", text))
-                    Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
-                },
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        if (expanded) {
+            Spacer(modifier = Modifier.height(8.dp))
+            SelectionContainer {
+                Text(text = text, style = MaterialTheme.typography.bodyLarge)
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Restore,
+                    contentDescription = "Revert",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp).clickable { 
+                        Toast.makeText(context, "Workspace state reverted.", Toast.LENGTH_SHORT).show()
+                    }
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Icon(
+                    imageVector = Icons.Default.ContentCopy,
+                    contentDescription = "Copy",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp).clickable { 
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("AI Message", text))
+                        Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
         }
     }
 }
@@ -450,13 +535,15 @@ fun AiMessage(text: String) {
 fun AppActionMessage(
     editedFiles: List<Pair<String, Boolean>> = emptyList(),
     appActions: List<String> = emptyList(),
-    onFileClick: (String) -> Unit = {}
+    onFileClick: (String) -> Unit = {},
+    isLastMessage: Boolean = true
 ) {
     Box(modifier = Modifier.fillMaxWidth().padding(end = 32.dp, start = 8.dp)) {
         ActionHistoryCard(
             editedFiles = editedFiles,
             appActions = appActions,
-            onFileClick = onFileClick
+            onFileClick = onFileClick,
+            isLastMessage = isLastMessage
         )
     }
 }
@@ -466,8 +553,10 @@ fun ActionHistoryCard(
     modifier: Modifier = Modifier,
     editedFiles: List<Pair<String, Boolean>> = emptyList(),
     appActions: List<String> = emptyList(),
-    onFileClick: (String) -> Unit = {}
+    onFileClick: (String) -> Unit = {},
+    isLastMessage: Boolean = true
 ) {
+    var expanded by remember(isLastMessage) { mutableStateOf(isLastMessage && (appActions.isNotEmpty() || editedFiles.isNotEmpty())) }
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -476,7 +565,10 @@ fun ActionHistoryCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // Header
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(vertical = 4.dp)
+            ) {
                 Icon(
                     imageVector = Icons.Default.List,
                     contentDescription = "Action history",
@@ -485,87 +577,64 @@ fun ActionHistoryCard(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "App Action Log",
+                    text = "App Action Log (${appActions.size + editedFiles.size})",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(modifier = Modifier.weight(1f))
+                Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            if (appActions.isNotEmpty()) {
-                appActions.forEach { action ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    ) {
-                        Box(modifier = Modifier.size(4.dp).background(MaterialTheme.colorScheme.onSurfaceVariant, RoundedCornerShape(2.dp)))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = action,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+            if (expanded) {
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                if (appActions.isNotEmpty()) {
+                    appActions.forEach { action ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        ) {
+                            Box(modifier = Modifier.size(4.dp).background(MaterialTheme.colorScheme.onSurfaceVariant, RoundedCornerShape(2.dp)))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = action,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-            
-            if (editedFiles.isNotEmpty()) {
-                // Edit section header
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Edit",
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Edited ${editedFiles.size} files",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            // Files list
-            editedFiles.forEach { (fileName, isModifiedOrAdded) ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onFileClick(fileName) }
-                        .padding(vertical = 4.dp, horizontal = 24.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = fileName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        modifier = Modifier.weight(1f).padding(end = 8.dp),
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                    )
+                
+                if (editedFiles.isNotEmpty()) {
+                    // Edit section header
+                    Text("Files edited:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
                     
-                    if (isModifiedOrAdded) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Modified",
-                            modifier = Modifier.size(16.dp),
-                            tint = Color(0xFF4CAF50) // Green
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Cancel,
-                            contentDescription = "Deleted",
-                            modifier = Modifier.size(16.dp),
-                            tint = Color(0xFFF44336) // Red
-                        )
+                    editedFiles.forEach { (filePath, success) ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 4.dp)
+                                .clickable { onFileClick(filePath) }
+                                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
+                                .padding(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (success) Icons.Default.CheckCircle else Icons.Default.Cancel,
+                                contentDescription = if (success) "Success" else "Failed",
+                                tint = if (success) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = filePath.substringAfterLast("/"),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                     }
                 }
-            }
             }
         }
     }

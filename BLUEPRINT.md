@@ -34,14 +34,14 @@
   - **Memory & Artifacts**: Global memory configuration and saved artifacts.
   - **System Instructions**: Global guardrails and rules.
   - **Built Agents**: Library of custom-configured agents.
-  - **Model Context Protocol (MCP)**: Configuration for MCP integrations (GitHub and Firebase Python included as default providers).
+  - **Model Context Protocol (MCP)**: Configuration for MCP integrations (GitHub and Firebase Python included as default providers; Cloudflare MCP to be checked later).
   - **Google Drive Archive**: Configure Google Drive integration. Old chats and workspaces (repos older than 10) are automatically compressed into ZIP files and saved in a designated Google Drive folder.
 - **Fixed Bottom Navigation**: A pill-shaped bar fixed at the absolute bottom of the screen (not floating). It switches between **Chat** and **Code** views, accompanied by a 3-dot menu for workspace actions. The 3-dot menu contains the following options:
   - **Thread Settings**: Access the active thread's configurations.
   - **Export**: Export the workspace as a ZIP file or quick push to GitHub.
   - **Remix**: Copy the repository and all integrations (agents, skills, settings) into a new workspace, clearing chat history and the GitHub repo link.
-  - **OmniRoute Dashboard**: Access the integrated proxy web interface.
-- **OmniRoute Dashboard**: An integrated WebView pointing to the embedded proxy's local web interface to manage API keys, routing, analytics, and connections to **local AI models** (e.g., Ollama, on-device models, LM Studio). OmniRoute natively handles on-device AI inference and routing.
+  - **AI Manager Token Panel**: Access the integrated proxy web interface.
+- **AI Manager Token Panel**: An integrated WebView pointing to the embedded proxy's local web interface to manage API keys, routing, analytics, and connections to **local AI models** (e.g., Ollama, on-device models, LM Studio). OmniRoute natively handles on-device AI inference and routing.
 
 ## 3. Workspace Views (Thread Specific)
 ### A. Chat View (Google AI Studio Style)
@@ -71,7 +71,7 @@
 - **File Readers & Analysis**: Built-in tools for agents to process user uploads.
 - **Code Sandboxing**: Secure execution environments for tools and scripts:
   - **On-Device JS Sandbox**: For local, lightweight JavaScript execution.
-  - **Cloud Firebase Python Sandbox**: Temporary, secure Python environment for heavy tool execution (similar to Google AI Studio's advanced sandboxing).
+  - **Cloud Firebase Python Sandbox**: [ON HOLD] Temporary, secure Python environment for heavy tool execution.
 - **Artifacts**: Support for generating standalone small web apps. Artifacts have the capability to embed AI logic directly within them.
   - **Design Studio (UI Map Artifact)**: A specialized visual artifact accessible from the main sidebar. Allows users to create clickable UI interface maps (e.g., "tap note card -> settings screen"). These preview web apps are highly customizable (adjustable button sizes, fonts, colors). The tool divides designs into screens/menus and exports them as well-structured JSON, code, or images (to prevent AI hallucination) to serve as exact UI blueprints for building native Kotlin shells in chat.
 - **Export & Deployment**:
@@ -85,9 +85,9 @@
 ## 5. Development Phases
 - **Phase 1 (Completed)**: Setup project foundation, UI skeleton (Sidebar, Fixed Bottom Navigation, Dual-tab layout), Local File System tracking, and the shell-level **Log Keeper**.
 - **Phase 2 (Completed)**: Implement the NanoHTTPD preview server and the Extensible Tool Infrastructure (building the hooks and empty spaces for tools, skills, and MCPs).
-- **Phase 3 (Completed)**: Replace Chat placeholders with real state (dynamic action history, message list, model picker, file attachment bottom sheet). Implement the **Agent Card (Top Bar)** UI and the **Chat Input UI** (scrollable input box with embedded Agent/Model Selector Pill). Implement the real **Global Sidebar UI** (New Chat, Artifacts, Design, List of Chats, Global Settings). Implement the 3-dot menu actions UI in the Fixed Bottom Navigation (Thread Settings, Export, Remix, OmniRoute Dashboard). Update Chat top-right "Play" button to open an artifacts list placeholder.
+- **Phase 3 (Completed)**: Replace Chat placeholders with real state (dynamic action history, message list, model picker, file attachment bottom sheet). Implement the **Agent Card (Top Bar)** UI and the **Chat Input UI** (scrollable input box with embedded Agent/Model Selector Pill). Implement the real **Global Sidebar UI** (New Chat, Artifacts, Design, List of Chats, Global Settings). Implement the 3-dot menu actions UI in the Fixed Bottom Navigation (Thread Settings, Export, Remix, AI Manager Token Panel). Update Chat top-right "Play" button to open an artifacts list placeholder.
 - **Phase 4 (File System & Native Readers)**: Build the real File Explorer wired to the local Android file system. Implement Native File Readers & Operations (app-level handling for PDF, PPT, and ZIP compress/decompress).
-- **Phase 5 (Code Editor)**: Implement the Code Editor (Acode Style). Connect it to the File Explorer to open, edit, and save real files. Include live generation view states and native file revert UI.
+- **Phase 5 (Code Editor)**: Implement the Code Editor (Acode Style). Connect it to the File Explorer to open, edit, and save real files. Include live generation view states and native file revert UI. Add tabs to the File Explorer drawer (File Tree, Issues, Pull Requests). Add local Issue and PR creation to the file/folder 3-dot context menu.
 - **Phase 6 (Global Settings UI & App Expansion)**:
   - **Global Settings List**: Build the Global App Settings as a list of items routing to dedicated pages:
     - **Agents**: List of built agents (and ability to build new ones).
@@ -101,7 +101,7 @@
     - **Library Management**: Settings for the new Library feature.
     - **Permissions**: System permissions used by the app.
     - **Font**: Typography settings.
-    - **OmniRoute**: OmniRoute settings page.
+    - **AI Manager Panel**: A professional, tabbed dashboard (Directory, Active Keys, Available Models, Token Counter, Model Rater) inspired by OmniRoute.
   - **Global Sidebar Addition (Library)**: Add a new element called "Library" to the Global Sidebar where all uploaded files are stored (synced to GDrive, similar to modern AI services).
   - **Chat Token Bar**: Add a small bar in the Chat view to monitor if token limits are exceeded.
 - **Phase 7 (Thread Settings & Export UI)**:
@@ -109,9 +109,9 @@
   - **Export Flow**: Wire up the 3-dot menu "Export" action to provide two distinct options: ZIP or GitHub.
   - **GitHub Export Bottom Sheet**: Build a focused bottom sheet (without pill tabs) specifically for committing changes. It must display the target repository/branch, a commit message text area, a list of explicitly changed files with their status (Modified, Added, Deleted), and a "Stage and commit all changes" button. This performs a targeted batch push of only the modified files, rather than a full zip upload.
 - **Phase 8 (Artifacts & Previews)**: Implement Artifacts generation and management. Implement the **PWA Bottom Sheet Preview** to load PWAs and Artifacts from the Chat top-right list.
-- **Phase 9 (OmniRoute & Local Sandboxing)**: Implement OmniRoute Integration (Node.js binary, SQLite dependency). Connect the OmniRoute Dashboard UI. Implement the Local JS Sandbox for secure, lightweight JavaScript execution.
+- **Phase 9 (Native AI Manager & Router)**: Implement a lightweight, pure-Kotlin local AI Gateway inspired by OmniRoute. Features a comprehensive provider directory (API-based, Free tiers, Local), advanced analytics (total request counts, token usage, and total cost estimation), dynamic routing strategies (priority lists, combo routing for cost/speed/quality optimization), a stable guided WebView for API key generation (Direct-to-Key), a Foreground Service proxy, and native on-device execution of `.gguf` models (via `llama.cpp` integration). Optimized for 3GB RAM Android Go. (See `PHASE_9_OMNIROUTE.md` for detailed sub-phases).
 - **Phase 10 (Native Tool Executor)**: Implement Native Tool Executor Integrations (manage OAuth tokens for Google Drive, GitHub API calls, and native tools like Search).
-- **Phase 11 (The Brain & Memory)**: Implement core Agent Logic and Diff Parsing. Connect them into the pre-built UI and tool infrastructure. Implement the Modular Memory Architecture for persistent context retention.
-- **Phase 12 (Antigravity Orchestration)**: Build the Parallel Agent Execution (Antigravity) orchestrator and Sync logic for handling concurrent sub-agent tasks and background operations.
-- **Phase 13 (Advanced Cloud Integration & CI/CD)**: Wire up advanced cloud capabilities (Firebase Python Sandbox, GitHub full export, Drive Archive, Artifact embeddings). Configure the CI/CD GitHub Actions Build Pipeline.
+- **Phase 11 (The Brain & Memory)**: Implement core Agent Logic and Diff Parsing. Connect them into the pre-built UI and tool infrastructure. Implement the Modular Memory Architecture for persistent context retention. Implement a multi-agent PR/Issue flow (Planner, Coder, Reviewer) controlled by optional thread/agent settings that utilizes local Issues/PRs like a GitHub MCP workflow to optimize token usage.
+- **Phase 12 (Antigravity Orchestration)**: Build the Parallel Agent Execution (Antigravity) orchestrator and Sync logic for handling concurrent sub-agent tasks and background operations, including the multi-agent PR/Issue flow. Integrates Antigravity CLI logic as the "AI Brain" to dynamically distribute tasks across Phase 9 providers (e.g., automatically routing background tasks to free-tier providers to save costs).
+- **Phase 13 (Advanced Cloud Integration & CI/CD)**: Wire up advanced cloud capabilities (GitHub full export, Drive Archive, Artifact embeddings). Configure the CI/CD GitHub Actions Build Pipeline. (Note: Firebase Python Sandbox is on hold).
 - **Phase 14 (Design Studio)**: Build the Design Studio / UI Map Artifact tool for generating UI reference blueprints.

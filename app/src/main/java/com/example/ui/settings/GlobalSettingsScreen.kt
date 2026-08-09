@@ -58,8 +58,9 @@ fun GlobalSettingsScreen(
                 SettingsItem("Library Management", "GDrive library settings", Icons.Default.FolderSpecial) { onNavigateTo("settings/library") }
                 SettingsItem("Permissions", "System permissions used", Icons.Default.Security) { onNavigateTo("settings/permissions") }
                 SettingsItem("Font & Typography", "App-wide font settings", Icons.Default.FontDownload) { onNavigateTo("settings/font") }
+                SettingsItem("Encrypted Backup", "Backup and restore your data securely", Icons.Default.Lock) { onNavigateTo("settings/backup") }
                 SettingsItem("OmniRoute", "Local proxy settings", Icons.Default.Router) { onNavigateTo("settings/omniroute") }
-                SettingsItem("Log Keeper", "View and export app logs", Icons.Default.BugReport) { onNavigateTo("settings/log_keeper") }
+                SettingsItem("Log Keeper", "View and export app logs", Icons.Default.BugReport) { onNavigateTo("log_keeper") }
             }
         }
     }

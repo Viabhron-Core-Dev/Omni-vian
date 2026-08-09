@@ -23,6 +23,9 @@ import com.example.engine.server.PreviewServerManager
 import com.example.engine.fs.FileNode
 import com.example.engine.fs.FileHistoryEngine
 import java.io.File
+import com.example.engine.db.AppDatabase
+import com.example.engine.db.WorkspacePullRequestEntity
+import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,10 +38,13 @@ fun CodeScreen(onMenuClick: () -> Unit) {
     val editorState = rememberCodeEditorState()
     
     var showMenu by remember { mutableStateOf(false) }
-    var showRevertDialog by remember { mutableStateOf(false) }
     var showFindReplaceDialog by remember { mutableStateOf(false) }
     var showGoToLineDialog by remember { mutableStateOf(false) }
     var showSyntaxCheckDialog by remember { mutableStateOf(false) }
+    var showSaveAsPRDialog by remember { mutableStateOf(false) }
+    val workspaceName = remember(com.example.engine.fs.LocalFileManager.getWorkspaceDir().name) { 
+        mutableStateOf(com.example.engine.fs.LocalFileManager.getWorkspaceName(com.example.engine.fs.LocalFileManager.getWorkspaceDir().name)) 
+    }
 
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         ModalNavigationDrawer(
@@ -60,7 +66,7 @@ fun CodeScreen(onMenuClick: () -> Unit) {
                     TopAppBar(
                         title = { 
                             Column {
-                                Text(selectedFile?.name ?: "Code Editor", style = MaterialTheme.typography.titleMedium)
+                                Text(selectedFile?.name ?: workspaceName.value, style = MaterialTheme.typography.titleMedium)
                                 if (editorState.isLiveGeneration) {
                                     Text("Live Generation View", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                                 }
@@ -88,7 +94,16 @@ fun CodeScreen(onMenuClick: () -> Unit) {
                                     Icon(Icons.Default.ContentCopy, contentDescription = "Copy")
                                 }
                                 IconButton(onClick = {
-                                    Toast.makeText(context, "Download not fully implemented in preview", Toast.LENGTH_SHORT).show()
+                                    val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                                    val fileToDownload = selectedFile?.file
+                                    if (fileToDownload != null && (downloadsDir.exists() || downloadsDir.mkdirs())) {
+                                        try {
+                                            fileToDownload.copyTo(java.io.File(downloadsDir, fileToDownload.name), overwrite = true)
+                                            Toast.makeText(context, "Saved to Downloads", Toast.LENGTH_SHORT).show()
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "Failed to download", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
                                 }) {
                                     Icon(Icons.Default.Download, contentDescription = "Download")
                                 }
@@ -146,13 +161,7 @@ fun CodeScreen(onMenuClick: () -> Unit) {
                                             showMenu = false
                                         }
                                     )
-                                    DropdownMenuItem(
-                                        text = { Text("File History (Revert)") },
-                                        onClick = { 
-                                            showRevertDialog = true
-                                            showMenu = false
-                                        }
-                                    )
+
                                 }
                             }
                         }
@@ -167,22 +176,66 @@ fun CodeScreen(onMenuClick: () -> Unit) {
                     if (showSyntaxCheckDialog) {
                         SyntaxCheckDialog(editorState = editorState, onDismiss = { showSyntaxCheckDialog = false })
                     }
-
-                    if (showRevertDialog && selectedFile != null) {
-                        FileRevertDialog(
-                            file = selectedFile!!.file,
-                            onDismiss = { showRevertDialog = false },
-                            onRevert = { revisionFile ->
-                                FileHistoryEngine.revertToFile(selectedFile!!.file, revisionFile)
-                                scope.launch {
-                                    editorState.loadFile(selectedFile!!.file) // Reload after revert
+                    
+                    if (showSaveAsPRDialog && selectedFile != null) {
+                        var prTitle by remember { mutableStateOf("") }
+                        var prDesc by remember { mutableStateOf("") }
+                        val db = remember { AppDatabase.getDatabase(context) }
+                        
+                        AlertDialog(
+                            onDismissRequest = { showSaveAsPRDialog = false },
+                            title = { Text("Save as Pull Request") },
+                            text = {
+                                Column {
+                                    Text("Propose your changes to ${selectedFile?.name}")
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    OutlinedTextField(
+                                        value = prTitle,
+                                        onValueChange = { prTitle = it },
+                                        label = { Text("PR Title") },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    OutlinedTextField(
+                                        value = prDesc,
+                                        onValueChange = { prDesc = it },
+                                        label = { Text("Description") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        minLines = 3
+                                    )
                                 }
-                                showRevertDialog = false
-                                Toast.makeText(context, "Reverted to ${revisionFile.name}", Toast.LENGTH_SHORT).show()
+                            },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    scope.launch {
+                                        val pr = WorkspacePullRequestEntity(
+                                            id = UUID.randomUUID().toString(),
+                                            workspaceId = com.example.engine.fs.LocalFileManager.getWorkspaceDir().name,
+                                            title = prTitle,
+                                            description = prDesc,
+                                            targetFile = selectedFile!!.file.absolutePath,
+                                            diff = editorState.content.text, // Simply storing current editor state as diff for now
+                                            status = "open",
+                                            createdAt = System.currentTimeMillis()
+                                        )
+                                        db.workspacePullRequestDao().savePullRequest(pr)
+                                        showSaveAsPRDialog = false
+                                        Toast.makeText(context, "Pull Request Created", Toast.LENGTH_SHORT).show()
+                                    }
+                                }) {
+                                    Text("Submit PR")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showSaveAsPRDialog = false }) {
+                                    Text("Cancel")
+                                }
                             }
                         )
                     }
-                    
+
+
+
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                         selectedFile?.let { fileNode ->
                             val name = fileNode.name.lowercase()

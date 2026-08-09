@@ -3,60 +3,49 @@ import re
 with open('app/src/main/java/com/example/ui/OmniRouteApp.kt', 'r') as f:
     content = f.read()
 
-# Add chatSessionId
-content = content.replace(
-    'var showGithubExport by remember { mutableStateOf(false) }',
-    'var showGithubExport by remember { mutableStateOf(false) }\n    var chatSessionId by remember { mutableStateOf(java.util.UUID.randomUUID().toString()) }'
-)
+# Add showNewChatDialog state
+old_vars = """    val navController = rememberNavController()
 
-# Update ChatScreen invocation
-content = content.replace(
-    'AppTab.CHAT -> ChatScreen(',
-    'AppTab.CHAT -> ChatScreen(\n                                key = chatSessionId,'
-)
+    ModalNavigationDrawer("""
+new_vars = """    val navController = rememberNavController()
+    var showNewChatDialog by remember { mutableStateOf(false) }
 
-# Update GlobalSidebar invocation
-content = content.replace(
-    'onNavigateToSettings = {',
-    'onNewChat = { chatSessionId = java.util.UUID.randomUUID().toString() },\n                onNavigateToSettings = {'
-)
+    ModalNavigationDrawer("""
+content = content.replace(old_vars, new_vars)
 
-# Replace navigation in settings
-content = content.replace(
-    '// navController.navigate(route)',
-    'navController.navigate(route)'
-)
+# Update onNewChat
+old_new_chat = """                onNewChat = { 
+                    val newSessionId = java.util.UUID.randomUUID().toString()
+                    val count = com.example.engine.fs.LocalFileManager.getWorkspaces().size
+                    com.example.engine.fs.LocalFileManager.setWorkspaceName(newSessionId, "Chat ${count + 1}")
+                    chatSessionId = newSessionId 
+                },"""
+new_new_chat = """                onNewChat = { 
+                    showNewChatDialog = true
+                },"""
+content = content.replace(old_new_chat, new_new_chat)
 
-# Add generic route catch-all for settings/something
-settings_placeholders = """            composable("settings/{subRoute}") { backStackEntry ->
-                val subRoute = backStackEntry.arguments?.getString("subRoute") ?: "Unknown"
-                Scaffold(
-                    topBar = {
-                        TopAppBar(
-                            title = { Text(subRoute.replaceFirstChar { it.uppercase() }) },
-                            navigationIcon = {
-                                IconButton(onClick = { navController.popBackStack() }) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                                }
-                            }
-                        )
-                    }
-                ) { padding ->
-                    Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                        Text("Settings content for $subRoute (Pending implementation)")
-                    }
+# Add NewChatDialog UI element
+old_nav_host = """        }
+    ) {
+        NavHost(navController = navController, startDestination = "main") {"""
+new_nav_host = """        }
+    ) {
+        if (showNewChatDialog) {
+            com.example.ui.chat.NewChatDialog(
+                onDismiss = { showNewChatDialog = false },
+                onCreate = { threadName, appType, model, integrations, instructions ->
+                    val newSessionId = java.util.UUID.randomUUID().toString()
+                    com.example.engine.fs.LocalFileManager.setWorkspaceName(newSessionId, threadName)
+                    chatSessionId = newSessionId
+                    showNewChatDialog = false
+                    scope.launch { drawerState.close() }
                 }
-            }
-"""
-
-# Insert before the last closing brace of NavHost
-content = re.sub(r'(        }\n    }\n})$', r'\1', content) # Ensure we don't mess up brackets
-content = content.replace('        }\n    }\n}', settings_placeholders + '        }\n    }\n}')
-
-# Fix missing Icons import for ArrowBack
-if 'import androidx.compose.material.icons.automirrored.filled.ArrowBack' not in content:
-    content = content.replace('import androidx.compose.material.icons.filled.BugReport', 'import androidx.compose.material.icons.filled.BugReport\nimport androidx.compose.material.icons.automirrored.filled.ArrowBack')
+            )
+        }
+        
+        NavHost(navController = navController, startDestination = "main") {"""
+content = content.replace(old_nav_host, new_nav_host)
 
 with open('app/src/main/java/com/example/ui/OmniRouteApp.kt', 'w') as f:
     f.write(content)
-

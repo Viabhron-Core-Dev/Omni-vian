@@ -34,26 +34,63 @@ fun OmniRouteApp() {
     var currentTab by remember { mutableStateOf(AppTab.CHAT) }
     var showWorkspaceActions by remember { mutableStateOf(false) }
     var showGithubExport by remember { mutableStateOf(false) }
-    var chatSessionId by remember { mutableStateOf(java.util.UUID.randomUUID().toString()) }
+    var showTokenPanel by remember { mutableStateOf(false) }
+    var chatSessionId by remember { 
+        mutableStateOf(java.util.UUID.randomUUID().toString().also { newId ->
+            val count = com.example.engine.fs.LocalFileManager.getWorkspaces().size
+            com.example.engine.fs.LocalFileManager.setWorkspaceName(newId, "Chat ${count + 1}")
+        }) 
+    }
     val context = LocalContext.current
     
     val navController = rememberNavController()
+    var showNewChatDialog by remember { mutableStateOf(false) }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
             GlobalSidebar(
                 onClose = { scope.launch { drawerState.close() } },
-                onNewChat = { chatSessionId = java.util.UUID.randomUUID().toString() },
+                onNewChat = { 
+                    showNewChatDialog = true
+                },
                 onNavigateToSettings = { 
                     scope.launch { drawerState.close() }
                     navController.navigate("settings")
                 },
                 currentChatId = chatSessionId,
-                onChatSelected = { newSessionId -> chatSessionId = newSessionId }
+                onChatSelected = { newSessionId -> chatSessionId = newSessionId
+                    val context = navController.context }
             )
         }
     ) {
+        if (showNewChatDialog) {
+            com.example.ui.chat.NewChatDialog(
+                onDismiss = { showNewChatDialog = false },
+                onCreate = { threadName, appType, model, integrations, instructions ->
+                    val newSessionId = java.util.UUID.randomUUID().toString()
+                    com.example.engine.fs.LocalFileManager.setWorkspaceName(newSessionId, threadName)
+                    scope.launch {
+                        val db = com.example.engine.db.AppDatabase.getDatabase(context)
+                        db.workspaceConfigDao().saveConfig(
+                            com.example.engine.db.WorkspaceConfigEntity(
+                                workspaceId = newSessionId,
+                                threadName = threadName,
+                                appType = appType,
+                                model = model,
+                                integrations = integrations,
+                                instructions = instructions
+                            )
+                        )
+                    }
+                    chatSessionId = newSessionId
+                    val context = navController.context
+                    showNewChatDialog = false
+                    scope.launch { drawerState.close() }
+                }
+            )
+        }
+        
         NavHost(navController = navController, startDestination = "main") {
             composable("main") {
                 Scaffold(
@@ -74,6 +111,7 @@ fun OmniRouteApp() {
                                     true
                                 }
                                 ChatScreen(
+                                    sessionId = chatSessionId,
                                     onMenuClick = { scope.launch { drawerState.open() } }
                                 )
                             }
@@ -128,6 +166,9 @@ fun OmniRouteApp() {
                         onThreadSettingsClick = {
                             showWorkspaceActions = false
                             navController.navigate("thread_settings")
+                        },
+                        onTokenPanelClick = {
+                            showTokenPanel = true
                         }
                     )
                 }
@@ -136,10 +177,17 @@ fun OmniRouteApp() {
                         onDismiss = { showGithubExport = false }
                     )
                 }
+                
+                if (showTokenPanel) {
+                    com.example.ui.chat.AiTokenPanelBottomSheet(
+                        onDismiss = { showTokenPanel = false }
+                    )
+                }
             }
             
             composable("thread_settings") {
                 ThreadSettingsScreen(
+                    workspaceId = chatSessionId,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -158,6 +206,21 @@ fun OmniRouteApp() {
                     }
                 )
             }
+            composable("settings/omniroute") {
+                com.example.ui.settings.omniroute.AiManagerPanelScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onAddKeyClick = { providerId ->
+                        navController.navigate("settings/omniroute/add_key/$providerId")
+                    }
+                )
+            }
+            composable("settings/omniroute/add_key/{providerId}") { backStackEntry ->
+                val providerId = backStackEntry.arguments?.getString("providerId") ?: return@composable
+                com.example.ui.settings.omniroute.DirectToKeyWebViewScreen(
+                    providerId = providerId,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
             composable("settings/{subRoute}") { backStackEntry ->
                 val subRoute = backStackEntry.arguments?.getString("subRoute") ?: "Unknown"
                 Scaffold(
@@ -172,8 +235,18 @@ fun OmniRouteApp() {
                         )
                     }
                 ) { padding ->
-                    Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                        Text("Settings content for $subRoute (Pending implementation)")
+                    Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+                        when (subRoute) {
+                            "skills" -> com.example.ui.settings.SkillsSettingsContent()
+                            "tools" -> com.example.ui.settings.ToolsSettingsContent()
+                            "mcp" -> com.example.ui.settings.MCPSettingsContent()
+                            "plugins" -> com.example.ui.settings.PluginsSettingsContent()
+                            "github", "firebase", "gdrive" -> com.example.ui.settings.IntegrationsSettingsContent()
+                            "permissions" -> com.example.ui.settings.PermissionsSettingsContent()
+                            "font" -> com.example.ui.settings.FontSettingsContent()
+                            "backup" -> com.example.ui.settings.BackupSettingsContent()
+                            else -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) { Text("Settings content for $subRoute (Pending implementation)") }
+                        }
                     }
                 }
             }

@@ -20,10 +20,9 @@ import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WorkspaceActionsBottomSheet(onDismiss: () -> Unit, onExportClick: () -> Unit = {}, onZipExportClick: () -> Unit = {}, onThreadSettingsClick: () -> Unit = {}) {
+fun WorkspaceActionsBottomSheet(onDismiss: () -> Unit, onExportClick: () -> Unit = {}, onZipExportClick: () -> Unit = {}, onThreadSettingsClick: () -> Unit = {}, onTokenPanelClick: () -> Unit = {}) {
     var showExportOptions by remember { mutableStateOf(false) }
     var showRemixDialog by remember { mutableStateOf(false) }
-    var showOmniRouteDialog by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
     
     ModalBottomSheet(
@@ -34,10 +33,11 @@ fun WorkspaceActionsBottomSheet(onDismiss: () -> Unit, onExportClick: () -> Unit
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp, top = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 ActionGridItem(
                     icon = Icons.Default.Settings,
@@ -51,6 +51,10 @@ fun WorkspaceActionsBottomSheet(onDismiss: () -> Unit, onExportClick: () -> Unit
                     onClick = { showExportOptions = true },
                     modifier = Modifier.size(80.dp)
                 )
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 ActionGridItem(
                     icon = Icons.AutoMirrored.Filled.OpenInNew,
                     label = "Remix",
@@ -59,8 +63,8 @@ fun WorkspaceActionsBottomSheet(onDismiss: () -> Unit, onExportClick: () -> Unit
                 )
                 ActionGridItem(
                     icon = Icons.Default.Dashboard,
-                    label = "OmniRoute Dashboard",
-                    onClick = { showOmniRouteDialog = true },
+                    label = "AI Token Panel",
+                    onClick = { onTokenPanelClick(); onDismiss() },
                     modifier = Modifier.size(80.dp)
                 )
             }
@@ -79,18 +83,6 @@ fun WorkspaceActionsBottomSheet(onDismiss: () -> Unit, onExportClick: () -> Unit
         )
     }
 
-    if (showOmniRouteDialog) {
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { showOmniRouteDialog = false },
-            title = { Text("OmniRoute Dashboard") },
-            text = { Text("This will open the integrated proxy web interface for local AI models and routing. (Feature pending OmniRoute proxy integration)") },
-            confirmButton = {
-                TextButton(onClick = { showOmniRouteDialog = false; onDismiss() }) {
-                    Text("OK")
-                }
-            }
-        )
-    }
 
     if (showExportOptions) {
         androidx.compose.material3.AlertDialog(
@@ -142,7 +134,7 @@ private fun ActionGridItem(
         Column(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(8.dp)
+            modifier = Modifier.padding(4.dp)
         ) {
             Icon(
                 imageVector = icon,
@@ -150,7 +142,7 @@ private fun ActionGridItem(
                 modifier = Modifier.size(24.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,

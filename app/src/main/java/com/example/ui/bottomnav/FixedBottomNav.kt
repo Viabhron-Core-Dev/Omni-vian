@@ -7,7 +7,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +38,7 @@ fun FixedBottomNav(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
@@ -67,7 +68,7 @@ fun FixedBottomNav(
             
             // 3 dots menu
             IconButton(onClick = onMoreClick) {
-                Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                Icon(Icons.Default.MoreHoriz, contentDescription = "More options")
             }
         }
     }
@@ -83,7 +84,7 @@ private fun TabButton(text: String, isSelected: Boolean, onClick: () -> Unit) {
             .clip(CircleShape)
             .background(backgroundColor)
             .clickable(onClick = onClick)
-            .padding(horizontal = 24.dp, vertical = 8.dp),
+            .padding(horizontal = 36.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(text = text, color = textColor, style = MaterialTheme.typography.labelLarge)

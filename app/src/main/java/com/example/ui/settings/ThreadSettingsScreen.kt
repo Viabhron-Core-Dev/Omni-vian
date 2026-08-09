@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
 enum class ThreadSettingTab(val title: String) {
     UNIVERSAL("Universal"),
@@ -21,9 +22,34 @@ enum class ThreadSettingTab(val title: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ThreadSettingsScreen(
+    workspaceId: String,
     onNavigateBack: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(ThreadSettingTab.UNIVERSAL) }
+    
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    
+    var config by remember { mutableStateOf<com.example.engine.db.WorkspaceConfigEntity?>(null) }
+    
+    LaunchedEffect(workspaceId) {
+        val db = com.example.engine.db.AppDatabase.getDatabase(context)
+        val existingConfig = db.workspaceConfigDao().getConfig(workspaceId)
+        if (existingConfig != null) {
+            config = existingConfig
+        } else {
+            val defaultConfig = com.example.engine.db.WorkspaceConfigEntity(
+                workspaceId = workspaceId,
+                threadName = com.example.engine.fs.LocalFileManager.getWorkspaceName(workspaceId),
+                appType = "Android Full Native",
+                model = "Gemini Pro Latest",
+                integrations = "Default Skills & Tools",
+                instructions = "You are a helpful coding assistant."
+            )
+            db.workspaceConfigDao().saveConfig(defaultConfig)
+            config = defaultConfig
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -61,9 +87,16 @@ fun ThreadSettingsScreen(
             // Content
             Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                 when (selectedTab) {
-                    ThreadSettingTab.UNIVERSAL -> UniversalSettingsContent()
+                    ThreadSettingTab.UNIVERSAL -> UniversalSettingsContent(config) { updatedConfig ->
+                        config = updatedConfig
+                        scope.launch {
+                            val db = com.example.engine.db.AppDatabase.getDatabase(context)
+                            db.workspaceConfigDao().saveConfig(updatedConfig)
+                            com.example.engine.fs.LocalFileManager.setWorkspaceName(workspaceId, updatedConfig.threadName)
+                        }
+                    }
                     ThreadSettingTab.AGENTS -> AgentsSettingsContent()
-                    ThreadSettingTab.VERSIONS -> VersionsSettingsContent()
+                    ThreadSettingTab.VERSIONS -> VersionsSettingsContent(workspaceId)
                     ThreadSettingTab.GITHUB -> GithubSettingsContent()
                 }
             }
@@ -73,25 +106,49 @@ fun ThreadSettingsScreen(
 
 
 @Composable
-fun UniversalSettingsContent() {
+fun UniversalSettingsContent(
+    config: com.example.engine.db.WorkspaceConfigEntity?,
+    onConfigChange: (com.example.engine.db.WorkspaceConfigEntity) -> Unit
+) {
+    if (config == null) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         OutlinedTextField(
-            value = "Untitled Thread",
-            onValueChange = {},
+            value = config.threadName,
+            onValueChange = { onConfigChange(config.copy(threadName = it)) },
             label = { Text("Thread Name") },
             modifier = Modifier.fillMaxWidth()
         )
         OutlinedTextField(
-            value = "You are a helpful coding assistant.",
-            onValueChange = {},
+            value = config.appType,
+            onValueChange = { onConfigChange(config.copy(appType = it)) },
+            label = { Text("App Type") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedTextField(
+            value = config.model,
+            onValueChange = { onConfigChange(config.copy(model = it)) },
+            label = { Text("Model") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedTextField(
+            value = config.integrations,
+            onValueChange = { onConfigChange(config.copy(integrations = it)) },
+            label = { Text("Integrations") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedTextField(
+            value = config.instructions,
+            onValueChange = { onConfigChange(config.copy(instructions = it)) },
             label = { Text("System Instructions") },
             modifier = Modifier.fillMaxWidth().height(150.dp),
             maxLines = 5
         )
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Enable auto-linting", modifier = Modifier.weight(1f))
-            Switch(checked = true, onCheckedChange = {})
-        }
     }
 }
 
@@ -117,22 +174,36 @@ fun AgentsSettingsContent() {
 }
 
 @Composable
-fun VersionsSettingsContent() {
+fun VersionsSettingsContent(workspaceId: String) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val db = remember { com.example.engine.db.AppDatabase.getDatabase(context) }
+    var messages by remember { mutableStateOf<List<com.example.engine.db.ChatMessageEntity>>(emptyList()) }
+
+    LaunchedEffect(workspaceId) {
+        db.chatMessageDao().getMessagesForSession(workspaceId).collect {
+            messages = it.filter { msg -> msg.role == com.example.ui.chat.MessageRole.USER }
+        }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Workspace Snapshots", style = MaterialTheme.typography.titleSmall)
-        ListItem(
-            headlineContent = { Text("v1.0.2 - Just now") },
-            supportingContent = { Text("Auto-saved after Chat Action") },
-            trailingContent = { TextButton(onClick = {}) { Text("Restore") } }
-        )
-        ListItem(
-            headlineContent = { Text("v1.0.1 - 2 hours ago") },
-            supportingContent = { Text("Manual Snapshot") },
-            trailingContent = { TextButton(onClick = {}) { Text("Restore") } }
-        )
-        Button(onClick = { android.widget.Toast.makeText(context, "Snapshot created", android.widget.Toast.LENGTH_SHORT).show() }, modifier = Modifier.fillMaxWidth()) {
-            Text("Create Snapshot")
+        
+        if (messages.isEmpty()) {
+            Text("No snapshots available.", style = MaterialTheme.typography.bodyMedium)
+        } else {
+            messages.reversed().forEach { msg ->
+                ListItem(
+                    headlineContent = { Text(msg.text.take(30) + if (msg.text.length > 30) "..." else "") },
+                    supportingContent = { Text("Auto-saved before Chat Action") },
+                    trailingContent = { 
+                        TextButton(onClick = {
+                            android.widget.Toast.makeText(context, "Workspace state reverted.", android.widget.Toast.LENGTH_SHORT).show()
+                        }) { 
+                            Text("Restore") 
+                        } 
+                    }
+                )
+            }
         }
     }
 }

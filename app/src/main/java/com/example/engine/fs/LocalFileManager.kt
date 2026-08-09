@@ -29,6 +29,21 @@ object LocalFileManager {
         }
     }
 
+    
+    suspend fun copyUriToFile(context: Context, uri: android.net.Uri, destFile: File): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                destFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            refreshFileTree()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     fun switchWorkspace(workspaceId: String) {
         val dir = File(baseDir, "workspaces/$workspaceId")
         if (!dir.exists()) {
