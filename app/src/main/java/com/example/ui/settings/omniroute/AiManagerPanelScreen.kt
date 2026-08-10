@@ -59,7 +59,7 @@ fun AiManagerPanelScreen(
                     2 -> CenterTextTab("Aggregated Models List (Pending Phase 9.3)")
                     3 -> MetricsTab(viewModel)
                     4 -> CenterTextTab("Model Ratings & Leaderboard (Pending Phase 9.12)")
-                    5 -> CenterTextTab("Translator Playground Debug UI (Pending Phase 9.6)")
+                    5 -> TranslatorTab()
                 }
             }
         }

@@ -12,7 +12,7 @@ object PreviewServerManager {
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
 
-    fun start(workspaceRoot: File, port: Int = 8080) {
+    fun start(workspaceRoot: File, port: Int = 8081) {
         if (server?.isAlive == true) return
         try {
             server = PreviewServer(port, workspaceRoot).apply {

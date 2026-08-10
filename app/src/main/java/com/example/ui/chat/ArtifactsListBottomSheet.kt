@@ -26,9 +26,9 @@ fun ArtifactsListBottomSheet(
     // Mock artifacts for now. Later these would be fetched from the local workspace.
     val artifacts = remember {
         listOf(
-            ArtifactItem("1", "Todo App", "A simple React Todo App", "http://localhost:8080/artifacts/todo/index.html"),
-            ArtifactItem("2", "Weather Dashboard", "Vue.js weather dashboard", "http://localhost:8080/artifacts/weather/index.html"),
-            ArtifactItem("3", "Calculator", "Vanilla JS Calculator", "http://localhost:8080/artifacts/calc/index.html")
+            ArtifactItem("1", "Todo App", "A simple React Todo App", "http://localhost:8081/artifacts/todo/index.html"),
+            ArtifactItem("2", "Weather Dashboard", "Vue.js weather dashboard", "http://localhost:8081/artifacts/weather/index.html"),
+            ArtifactItem("3", "Calculator", "Vanilla JS Calculator", "http://localhost:8081/artifacts/calc/index.html")
         )
     }
 
