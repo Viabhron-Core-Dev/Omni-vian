@@ -8,6 +8,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -37,7 +38,7 @@ fun ToolsSettingsContent() {
         mutableStateListOf(
             MCPCategory(
                 name = "On-Device (Local)",
-                isExpanded = true,
+                isExpanded = false,
                 tools = listOf(
                     Tool("Edit File", "Modify local workspace files"),
                     Tool("View File", "Read local workspace files"),
@@ -67,7 +68,8 @@ fun ToolsSettingsContent() {
         )
     }
 
-    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Box(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.padding(16.dp).fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Tools", style = MaterialTheme.typography.titleMedium)
         Text("Manage tool permissions. Tools list refreshes when MCPs are connected.", style = MaterialTheme.typography.bodyMedium)
         
@@ -151,6 +153,13 @@ fun ToolsSettingsContent() {
             }
         }
     }
+    FloatingActionButton(
+        onClick = { /* TODO */ },
+        modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+    ) {
+        Icon(Icons.Default.Add, contentDescription = "Create Tool")
+    }
+}
 }
 
 @Composable
@@ -206,5 +215,16 @@ fun BackupSettingsContent() {
         Text("Securely backup your workspace, settings, and local keys to an encrypted file.")
         Button(onClick = {}) { Text("Create Encrypted Backup") }
         Button(onClick = {}) { Text("Restore from Backup") }
+    }
+}
+
+@Composable
+fun EditorSettingsContent() {
+    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Code Editor Settings", style = MaterialTheme.typography.titleMedium)
+        Text("Manage editor preferences.")
+        ListItem(headlineContent = { Text("Word Wrap") }, trailingContent = { Switch(checked = false, onCheckedChange = {}) })
+        ListItem(headlineContent = { Text("Show Line Numbers") }, trailingContent = { Switch(checked = true, onCheckedChange = {}) })
+        ListItem(headlineContent = { Text("Auto-Indent") }, trailingContent = { Switch(checked = true, onCheckedChange = {}) })
     }
 }

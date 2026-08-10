@@ -134,10 +134,18 @@ fun ChatSidebarItem(
     var showMenu by remember { mutableStateOf(false) }
     var showRename by remember { mutableStateOf(false) }
     var chatName by remember { mutableStateOf(LocalFileManager.getWorkspaceName(workspace.name)) }
+    val timestamp = remember(workspace.lastModified()) {
+        java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault()).format(java.util.Date(workspace.lastModified()))
+    }
 
     NavigationDrawerItem(
         icon = { Icon(Icons.Default.Folder, contentDescription = null) },
-        label = { Text(chatName) },
+        label = { 
+            Column {
+                Text(chatName, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text(timestamp, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
         selected = isSelected,
         onClick = onClick,
         modifier = Modifier.padding(horizontal = 12.dp),

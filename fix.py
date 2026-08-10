@@ -1,45 +1,38 @@
-import re
+with open('app/src/main/java/com/example/ui/settings/SettingsPlaceholders.kt', 'r') as f:
+    content = f.read()
 
-# Fix ChatScreen.kt
-with open('app/src/main/java/com/example/ui/chat/ChatScreen.kt', 'r') as f:
-    chat_content = f.read()
-
-chat_content = chat_content.replace(
-    'var showArtifactsList by remember { mutableStateOf(false) }',
-    'var showArtifactsList by remember { mutableStateOf(false) }\n    var isGenerating by remember { mutableStateOf(false) }\n    var currentJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }'
+content = content.replace(
+    '''    Box(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.padding(16.dp).fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {''',
+    '''    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {'''
 )
 
-with open('app/src/main/java/com/example/ui/chat/ChatScreen.kt', 'w') as f:
-    f.write(chat_content)
+old_end = """                            )
+                        }
+                    }
+                }
+            }
+        }
+        
+        FloatingActionButton(
+            onClick = { /* TODO: Open Create Tool Dialog */ },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "Create Custom JS Tool")
+        }
+    }
+}"""
 
-# Fix GeminiClient.kt imports
-with open('app/src/main/java/com/example/ui/chat/GeminiClient.kt', 'r') as f:
-    gemini_content = f.read()
+new_end = """                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}"""
+content = content.replace(old_end, new_end)
 
-import_block_bad = """import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
-import okhttp3.Call
-import okhttp3.Callback
-import okhttp3.Response
-import java.io.IOException
-import okhttp3.Request
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
-import okhttp3.Call
-import okhttp3.Callback
-import okhttp3.Response
-import java.io.IOException"""
-
-import_block_good = """import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
-import okhttp3.Call
-import okhttp3.Callback
-import okhttp3.Response
-import java.io.IOException
-import okhttp3.Request"""
-
-gemini_content = gemini_content.replace(import_block_bad, import_block_good)
-
-with open('app/src/main/java/com/example/ui/chat/GeminiClient.kt', 'w') as f:
-    f.write(gemini_content)
+with open('app/src/main/java/com/example/ui/settings/SettingsPlaceholders.kt', 'w') as f:
+    f.write(content)
 

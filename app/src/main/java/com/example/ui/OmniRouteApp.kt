@@ -245,6 +245,7 @@ fun OmniRouteApp() {
                             "permissions" -> com.example.ui.settings.PermissionsSettingsContent()
                             "font" -> com.example.ui.settings.FontSettingsContent()
                             "backup" -> com.example.ui.settings.BackupSettingsContent()
+                            "editor" -> com.example.ui.settings.EditorSettingsContent()
                             else -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) { Text("Settings content for $subRoute (Pending implementation)") }
                         }
                     }

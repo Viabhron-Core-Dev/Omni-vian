@@ -30,6 +30,7 @@ import java.util.UUID
 @Composable
 fun FileExplorer(
     onFileClick: (FileNode) -> Unit,
+    onCloseClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val fileTree by LocalFileManager.fileTreeState.collectAsState()
@@ -41,12 +42,21 @@ fun FileExplorer(
     val workspaceId = LocalFileManager.getWorkspaceDir().name
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("Files", "Issues", "PRs")
-    Column(modifier = modifier.fillMaxSize()) {
-        Text(
-            text = workspaceName.value,
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(16.dp)
-        )
+    Column(modifier = modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onCloseClick) {
+                Icon(Icons.Default.Close, contentDescription = "Close Drawer")
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = workspaceName.value,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f)
+            )
+        }
         
         OutlinedTextField(
             value = searchQuery,

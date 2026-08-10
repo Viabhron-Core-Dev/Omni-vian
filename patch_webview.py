@@ -1,4 +1,4 @@
-package com.example.ui.settings.omniroute
+content = """package com.example.ui.settings.omniroute
 
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
@@ -110,3 +110,7 @@ fun DirectToKeyWebViewScreen(
         }
     }
 }
+"""
+
+with open('app/src/main/java/com/example/ui/settings/omniroute/DirectToKeyWebViewScreen.kt', 'w') as f:
+    f.write(content)

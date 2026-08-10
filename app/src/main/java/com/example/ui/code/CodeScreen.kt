@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.*
 import kotlinx.coroutines.launch
 import com.example.engine.server.PreviewServerManager
 import com.example.engine.fs.FileNode
@@ -30,7 +31,7 @@ import java.util.UUID
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CodeScreen(onMenuClick: () -> Unit) {
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    var isFileExplorerOpen by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val isServerRunning by PreviewServerManager.isRunning.collectAsState()
@@ -46,26 +47,11 @@ fun CodeScreen(onMenuClick: () -> Unit) {
         mutableStateOf(com.example.engine.fs.LocalFileManager.getWorkspaceName(com.example.engine.fs.LocalFileManager.getWorkspaceDir().name)) 
     }
 
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            drawerContent = {
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
-                        FileExplorer(
-                            onFileClick = { fileNode ->
-                                selectedFile = fileNode
-                            }
-                        )
-                    }
-                }
-            }
-        ) {
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    TopAppBar(
-                        title = { 
-                            Column {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            TopAppBar(
+                title = { 
+                    Column {
                                 Text(selectedFile?.name ?: workspaceName.value, style = MaterialTheme.typography.titleMedium)
                                 if (editorState.isLiveGeneration) {
                                     Text("Live Generation View", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
@@ -121,7 +107,7 @@ fun CodeScreen(onMenuClick: () -> Unit) {
                                     contentDescription = if (isServerRunning) "Stop Server" else "Start Server"
                                 )
                             }
-                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                            IconButton(onClick = { isFileExplorerOpen = true }) {
                                 Icon(Icons.Default.Folder, "File Tree")
                             }
                             
@@ -254,6 +240,25 @@ fun CodeScreen(onMenuClick: () -> Unit) {
                         }
                     }
                 }
+        
+        AnimatedVisibility(
+            visible = isFileExplorerOpen,
+            enter = slideInHorizontally(initialOffsetX = { it }),
+            exit = slideOutHorizontally(targetOffsetX = { it }),
+            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
+        ) {
+            Surface(
+                modifier = Modifier.width(300.dp).fillMaxHeight(),
+                shadowElevation = 8.dp,
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                FileExplorer(
+                    onFileClick = { fileNode ->
+                        selectedFile = fileNode
+                        isFileExplorerOpen = false
+                    },
+                    onCloseClick = { isFileExplorerOpen = false }
+                )
             }
         }
     }

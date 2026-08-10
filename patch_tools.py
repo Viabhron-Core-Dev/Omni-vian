@@ -3,155 +3,33 @@ import re
 with open('app/src/main/java/com/example/ui/settings/SettingsPlaceholders.kt', 'r') as f:
     content = f.read()
 
-# Add imports
-imports = """import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.Alignment
-"""
+# Make all divisions folded initially
+content = content.replace('isExpanded = true,', 'isExpanded = false,')
 
-content = re.sub(r'import .*?\n(?:import .*?\n)*', imports, content, count=1)
-
-new_tools_content = """@Composable
-fun ToolsSettingsContent() {
-    var searchQuery by remember { mutableStateOf("") }
+# Find ToolsSettingsContent
+match = re.search(r'(@Composable\nfun ToolsSettingsContent\(\) \{.*?^})', content, re.MULTILINE | re.DOTALL)
+if match:
+    tools_content = match.group(1)
     
-    // Tools Model
-    data class Tool(val name: String, val description: String, var permission: String = "Always Ask")
-    data class MCPCategory(val name: String, val tools: List<Tool>, var isExpanded: Boolean = false)
+    # Replace its Column with Box + Column
+    tools_content = tools_content.replace(
+        'Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {',
+        'Box(modifier = Modifier.fillMaxSize()) {\n    Column(modifier = Modifier.padding(16.dp).fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {',
+        1
+    )
     
-    val mcpCategories = remember {
-        mutableStateListOf(
-            MCPCategory(
-                name = "On-Device (Local)",
-                isExpanded = true,
-                tools = listOf(
-                    Tool("Edit File", "Modify local workspace files"),
-                    Tool("View File", "Read local workspace files"),
-                    Tool("Create PR", "Create a local Pull Request"),
-                    Tool("Create Issue", "Create a local Issue"),
-                    Tool("Run Command", "Execute local shell commands"),
-                    Tool("JS Sandbox", "Execute lightweight JS scripts")
-                )
-            ),
-            MCPCategory(
-                name = "GitHub",
-                isExpanded = false,
-                tools = listOf(
-                    Tool("Search Repos", "Search GitHub repositories"),
-                    Tool("Get Issue", "Fetch issue details"),
-                    Tool("Create Comment", "Comment on PRs/Issues")
-                )
-            ),
-            MCPCategory(
-                name = "Google Drive",
-                isExpanded = false,
-                tools = listOf(
-                    Tool("Search Drive", "Search for files on Google Drive"),
-                    Tool("Read Document", "Read Docs/Sheets content")
-                )
-            )
-        )
-    }
+    # Add FAB
+    tools_content = tools_content.replace(
+        '        }\n    }\n}',
+        '        }\n    }\n    FloatingActionButton(\n        onClick = { /* TODO */ },\n        modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)\n    ) {\n        Icon(Icons.Default.Add, contentDescription = "Create Tool")\n    }\n}\n}',
+        1
+    )
+    
+    content = content[:match.start()] + tools_content + content[match.end():]
 
-    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Tools", style = MaterialTheme.typography.titleMedium)
-        Text("Manage tool permissions. Tools list refreshes when MCPs are connected.", style = MaterialTheme.typography.bodyMedium)
-        
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Search tools...") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
-            singleLine = true
-        )
-        
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            mcpCategories.forEachIndexed { catIndex, category ->
-                val filteredTools = category.tools.filter { it.name.contains(searchQuery, ignoreCase = true) || it.description.contains(searchQuery, ignoreCase = true) }
-                
-                if (filteredTools.isNotEmpty()) {
-                    item {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .clickable { 
-                                    mcpCategories[catIndex] = category.copy(isExpanded = !category.isExpanded) 
-                                },
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(category.name, style = MaterialTheme.typography.titleSmall)
-                                Icon(
-                                    if (category.isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                    contentDescription = null
-                                )
-                            }
-                        }
-                    }
-                    
-                    if (category.isExpanded || searchQuery.isNotEmpty()) {
-                        items(filteredTools.size) { toolIndex ->
-                            val tool = filteredTools[toolIndex]
-                            var showDropdown by remember { mutableStateOf(false) }
-                            
-                            ListItem(
-                                headlineContent = { Text(tool.name) },
-                                supportingContent = { Text(tool.description) },
-                                trailingContent = {
-                                    Box {
-                                        TextButton(onClick = { showDropdown = true }) {
-                                            Text(tool.permission)
-                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        }
-                                        DropdownMenu(
-                                            expanded = showDropdown,
-                                            onDismissRequest = { showDropdown = false }
-                                        ) {
-                                            val options = listOf("Always Ask", "Use Freely", "No Permission")
-                                            options.forEach { option ->
-                                                DropdownMenuItem(
-                                                    text = { Text(option) },
-                                                    onClick = {
-                                                        // Update permission in mutable list
-                                                        val updatedTools = category.tools.toMutableList()
-                                                        updatedTools[toolIndex] = tool.copy(permission = option)
-                                                        mcpCategories[catIndex] = category.copy(tools = updatedTools)
-                                                        showDropdown = false
-                                                    }
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}"""
-
-content = re.sub(r'@Composable\nfun ToolsSettingsContent\(\) \{.*?^}', new_tools_content, content, flags=re.MULTILINE | re.DOTALL)
+# Add Icons.Default.Add import if missing
+if 'import androidx.compose.material.icons.filled.Add' not in content:
+    content = content.replace('import androidx.compose.material.icons.filled.Search', 'import androidx.compose.material.icons.filled.Search\nimport androidx.compose.material.icons.filled.Add')
 
 with open('app/src/main/java/com/example/ui/settings/SettingsPlaceholders.kt', 'w') as f:
     f.write(content)
