@@ -14,6 +14,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import com.example.utils.LogKeeper
 
 @JsonClass(generateAdapter = true)
 data class OmniMessage(
@@ -81,6 +82,8 @@ object OmniRouteClient {
             .post(body)
             .build()
             
+        LogKeeper.log("Network", "Request to $baseUrl", jsonBody)
+            
         val call = client.newCall(request)
         
         continuation.invokeOnCancellation {
@@ -89,6 +92,7 @@ object OmniRouteClient {
         
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
+                LogKeeper.log("Network Error", "Request failed", "${e.message}", e.stackTraceToString())
                 if (continuation.isCancelled) return
                 if (e.message?.contains("canceled", ignoreCase = true) == true || e.message?.contains("cancelled", ignoreCase = true) == true) {
                     continuation.resume(OmniRouteResult(text = "Generation stopped."))
@@ -98,8 +102,9 @@ object OmniRouteClient {
             }
 
             override fun onResponse(call: Call, response: Response) {
-                if (continuation.isCancelled) return
                 val responseBody = response.body?.string()
+                LogKeeper.log("Network", "Response code: ${response.code}", responseBody ?: "null")
+                if (continuation.isCancelled) return
                 if (response.isSuccessful && responseBody != null) {
                     try {
                         val omniResponse = responseAdapter.fromJson(responseBody)

@@ -247,19 +247,40 @@ fun ChatScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Agent/Model Selector Pill
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                        modifier = Modifier.clickable { /* open model picker */ }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    var showModelPicker by remember { mutableStateOf(false) }
+                    var selectedModel by remember { mutableStateOf("Gemini Pro Latest") }
+                    val availableModels = listOf("Gemini Pro Latest", "Gemini Flash", "Claude 3.5 Sonnet", "GPT-4o", "Local Llama 3")
+                    
+                    Box {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            modifier = Modifier.clickable { showModelPicker = true }
                         ) {
-                            Text("Gemini Pro", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Model", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurface)
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(selectedModel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Model", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
+                        
+                        DropdownMenu(
+                            expanded = showModelPicker,
+                            onDismissRequest = { showModelPicker = false }
+                        ) {
+                            availableModels.forEach { modelName ->
+                                DropdownMenuItem(
+                                    text = { Text(modelName) },
+                                    onClick = { 
+                                        selectedModel = modelName
+                                        showModelPicker = false 
+                                    }
+                                )
+                            }
                         }
                     }
 

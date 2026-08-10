@@ -1,5 +1,7 @@
 package com.example.ui.settings.omniroute
 
+import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -56,7 +58,7 @@ fun AiManagerPanelScreen(
                 when (selectedTabIndex) {
                     0 -> DirectoryTab(viewModel, onAddKeyClick)
                     1 -> ActiveKeysTab(viewModel)
-                    2 -> CenterTextTab("Aggregated Models List (Pending Phase 9.3)")
+                    2 -> ModelsTab()
                     3 -> MetricsTab(viewModel)
                     4 -> CenterTextTab("Model Ratings & Leaderboard (Pending Phase 9.12)")
                     5 -> TranslatorTab()
@@ -142,6 +144,40 @@ fun MetricsTab(viewModel: AiManagerViewModel) {
                 headlineContent = { Text("Estimated Cost") },
                 trailingContent = { Text(String.format("$%.4f", cost ?: 0.0)) }
             )
+        }
+    }
+}
+
+
+@Composable
+fun ModelsTab() {
+    val models = listOf(
+        "Gemini Pro Latest (google)",
+        "Gemini Flash (google)",
+        "Claude 3.5 Sonnet (anthropic)",
+        "GPT-4o (openai)",
+        "Local Llama 3 (local)"
+    )
+    
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(models) { model ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(model, style = MaterialTheme.typography.titleMedium)
+                }
+            }
         }
     }
 }
