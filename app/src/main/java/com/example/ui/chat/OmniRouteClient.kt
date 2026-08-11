@@ -60,7 +60,7 @@ object OmniRouteClient {
     
     var baseUrl: String = "http://localhost:8080/v1/chat/completions"
 
-    suspend fun generateContent(messages: List<ChatMessage>): OmniRouteResult = suspendCancellableCoroutine { continuation ->
+    suspend fun generateContent(messages: List<ChatMessage>, model: String = "omni-default"): OmniRouteResult = suspendCancellableCoroutine { continuation ->
         
         val omniMessages = messages.mapNotNull { msg ->
             when (msg.role) {
@@ -71,6 +71,7 @@ object OmniRouteClient {
         }
         
         val requestData = OmniRequest(
+            model = model,
             messages = omniMessages
         )
         

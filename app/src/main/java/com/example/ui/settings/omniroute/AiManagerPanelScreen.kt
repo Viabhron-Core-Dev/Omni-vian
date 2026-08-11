@@ -58,7 +58,7 @@ fun AiManagerPanelScreen(
                 when (selectedTabIndex) {
                     0 -> DirectoryTab(viewModel, onAddKeyClick)
                     1 -> ActiveKeysTab(viewModel)
-                    2 -> ModelsTab()
+                    2 -> ModelsTab(viewModel)
                     3 -> MetricsTab(viewModel)
                     4 -> CenterTextTab("Model Ratings & Leaderboard (Pending Phase 9.12)")
                     5 -> TranslatorTab()
@@ -150,14 +150,8 @@ fun MetricsTab(viewModel: AiManagerViewModel) {
 
 
 @Composable
-fun ModelsTab() {
-    val models = listOf(
-        "Gemini Pro Latest (google)",
-        "Gemini Flash (google)",
-        "Claude 3.5 Sonnet (anthropic)",
-        "GPT-4o (openai)",
-        "Local Llama 3 (local)"
-    )
+fun ModelsTab(viewModel: AiManagerViewModel) {
+    val models by viewModel.availableModels.collectAsState()
     
     LazyColumn(
         modifier = Modifier.fillMaxSize(),

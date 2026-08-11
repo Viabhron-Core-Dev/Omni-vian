@@ -31,6 +31,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.ui.settings.omniroute.AiManagerViewModel
 import androidx.compose.ui.graphics.Color
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -65,6 +67,9 @@ fun ChatScreen(
     sessionId: String,
     onMenuClick: () -> Unit
 ) {
+    val aiViewModel: AiManagerViewModel = viewModel()
+    val availableModels by aiViewModel.availableModels.collectAsState()
+    
     val workspaceName = remember { mutableStateOf(com.example.engine.fs.LocalFileManager.getWorkspaceName(com.example.engine.fs.LocalFileManager.getWorkspaceDir().name)) }
     var inputText by remember { mutableStateOf("") }
     val context = LocalContext.current
@@ -248,8 +253,14 @@ fun ChatScreen(
                 ) {
                     // Agent/Model Selector Pill
                     var showModelPicker by remember { mutableStateOf(false) }
-                    var selectedModel by remember { mutableStateOf("Gemini Pro Latest") }
-                    val availableModels = listOf("Gemini Pro Latest", "Gemini Flash", "Claude 3.5 Sonnet", "GPT-4o", "Local Llama 3")
+                    var selectedModel by remember { mutableStateOf("Select Model") }
+                    
+                    // Update selected model if it's not in the available models list
+                    LaunchedEffect(availableModels) {
+                        if (availableModels.isNotEmpty() && !availableModels.contains(selectedModel)) {
+                            selectedModel = availableModels.first()
+                        }
+                    }
                     
                     Box {
                         Surface(
@@ -317,7 +328,10 @@ fun ChatScreen(
                                     isGenerating = true
                                     currentJob = scope.launch {
                                         try {
-                                            val response = com.example.ui.chat.OmniRouteClient.generateContent(chatMessages.filter { it.id != generatingMessage.id })
+                                            val response = com.example.ui.chat.OmniRouteClient.generateContent(
+                                                chatMessages.filter { it.id != generatingMessage.id },
+                                                selectedModel
+                                            )
                                             val index = chatMessages.indexOf(generatingMessage)
                                             if (index != -1) {
                                                 chatMessages.removeAt(index)
