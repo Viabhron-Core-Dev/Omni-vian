@@ -21,8 +21,9 @@ import com.example.engine.db.ProviderPrepopulator
     FallbackChainEntity::class,
     TokenUsageEntity::class,
     ModelRatingEntity::class,
-    RequestLogEntity::class
-], version = 4, exportSchema = false)
+    RequestLogEntity::class,
+    AiModelEntity::class
+], version = 5, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun workspaceConfigDao(): WorkspaceConfigDao
@@ -33,6 +34,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun apiKeyDao(): ApiKeyDao
     abstract fun fallbackChainDao(): FallbackChainDao
     abstract fun metricsDao(): MetricsDao
+    abstract fun aiModelDao(): AiModelDao
 
     companion object {
         @Volatile

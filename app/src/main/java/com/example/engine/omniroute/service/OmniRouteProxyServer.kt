@@ -41,66 +41,24 @@ class OmniRouteProxyServer(port: Int, private val context: Context) : NanoHTTPD(
                 
                 val request = requestAdapter.fromJson(postData) ?: return newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "Invalid JSON")
                 
-                val modelStr = request.model ?: "Gemini Pro Latest"
+                val modelStr = request.model ?: "google_ai_studio/gemini-1.5-pro-latest"
+                val slashIdx = modelStr.indexOf('/')
                 
-                // Determine provider and format
-                val providerId: String
-                val targetFormat: TranslationEngine.ProviderFormat
-                val actualModelName: String
-                val baseUrl: String
-                
-                when {
-                    modelStr.contains("Gemini", ignoreCase = true) -> {
-                        providerId = "google_ai_studio"
-                        targetFormat = TranslationEngine.ProviderFormat.OPENAI
-                        actualModelName = if (modelStr.contains("Flash")) "gemini-1.5-flash" else "gemini-1.5-pro"
-                        baseUrl = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-                    }
-                    modelStr.contains("GPT", ignoreCase = true) -> {
-                        providerId = "openai"
-                        targetFormat = TranslationEngine.ProviderFormat.OPENAI
-                        actualModelName = if (modelStr.contains("Mini")) "gpt-4o-mini" else "gpt-4o"
-                        baseUrl = "https://api.openai.com/v1/chat/completions"
-                    }
-                    modelStr.contains("Claude", ignoreCase = true) -> {
-                        providerId = "anthropic"
-                        targetFormat = TranslationEngine.ProviderFormat.ANTHROPIC
-                        actualModelName = if (modelStr.contains("Opus")) "claude-3-opus-20240229" else "claude-3-5-sonnet-20240620"
-                        baseUrl = "https://api.anthropic.com/v1/messages"
-                    }
-                    modelStr.contains("OpenRouter", ignoreCase = true) -> {
-                        providerId = "openrouter"
-                        targetFormat = TranslationEngine.ProviderFormat.OPENAI
-                        actualModelName = if (modelStr.contains("Mistral")) "mistralai/mistral-7b-instruct:free" else "meta-llama/llama-3-8b-instruct:free"
-                        baseUrl = "https://openrouter.ai/api/v1/chat/completions"
-                    }
-                    modelStr.contains("Groq", ignoreCase = true) -> {
-                        providerId = "groq"
-                        targetFormat = TranslationEngine.ProviderFormat.OPENAI
-                        actualModelName = if (modelStr.contains("70B")) "llama3-70b-8192" else "llama3-8b-8192"
-                        baseUrl = "https://api.groq.com/openai/v1/chat/completions"
-                    }
-                    modelStr.contains("Together", ignoreCase = true) -> {
-                        providerId = "together_ai"
-                        targetFormat = TranslationEngine.ProviderFormat.OPENAI
-                        actualModelName = "meta-llama/Llama-3-8b-chat-hf"
-                        baseUrl = "https://api.together.xyz/v1/chat/completions"
-                    }
-                    modelStr.contains("Local", ignoreCase = true) -> {
-                        providerId = "local_gguf"
-                        targetFormat = TranslationEngine.ProviderFormat.OPENAI
-                        actualModelName = "local-model"
-                        baseUrl = "http://localhost:8080/v1/chat/completions"
-                    }
-                    else -> {
-                        // Fallback to Gemini for now
-                        providerId = "google_ai_studio"
-                        targetFormat = TranslationEngine.ProviderFormat.OPENAI
-                        actualModelName = "gemini-1.5-pro"
-                        baseUrl = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-                    }
+                val providerId = if (slashIdx != -1) modelStr.substring(0, slashIdx) else "google_ai_studio"
+                val actualModelName = if (slashIdx != -1) modelStr.substring(slashIdx + 1) else modelStr
+
+                // Determine target format and base url dynamically from provider pre-populator
+                val (targetFormat, baseUrl) = when (providerId) {
+                    "google_ai_studio" -> Pair(TranslationEngine.ProviderFormat.OPENAI, "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions")
+                    "openai" -> Pair(TranslationEngine.ProviderFormat.OPENAI, "https://api.openai.com/v1/chat/completions")
+                    "anthropic" -> Pair(TranslationEngine.ProviderFormat.ANTHROPIC, "https://api.anthropic.com/v1/messages")
+                    "openrouter" -> Pair(TranslationEngine.ProviderFormat.OPENAI, "https://openrouter.ai/api/v1/chat/completions")
+                    "groq" -> Pair(TranslationEngine.ProviderFormat.OPENAI, "https://api.groq.com/openai/v1/chat/completions")
+                    "together_ai" -> Pair(TranslationEngine.ProviderFormat.OPENAI, "https://api.together.xyz/v1/chat/completions")
+                    "local_gguf" -> Pair(TranslationEngine.ProviderFormat.OPENAI, "http://localhost:8080/v1/chat/completions")
+                    else -> Pair(TranslationEngine.ProviderFormat.OPENAI, "https://api.openai.com/v1/chat/completions")
                 }
-                
+
                 val db = AppDatabase.getDatabase(context)
                 val activeKeys = runBlocking { db.apiKeyDao().getKeysForProvider(providerId).first() }
                 val key = activeKeys.firstOrNull { it.isActive }

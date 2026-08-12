@@ -37,6 +37,18 @@ interface FallbackChainDao {
 }
 
 @Dao
+interface AiModelDao {
+    @Query("SELECT * FROM ai_models ORDER BY providerId ASC, modelId ASC")
+    fun getAllModels(): Flow<List<AiModelEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertModels(models: List<AiModelEntity>)
+
+    @Query("DELETE FROM ai_models WHERE providerId = :providerId")
+    suspend fun deleteModelsForProvider(providerId: String)
+}
+
+@Dao
 interface MetricsDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTokenUsage(usage: TokenUsageEntity)

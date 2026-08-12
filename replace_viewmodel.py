@@ -1,4 +1,9 @@
-package com.example.ui.settings.omniroute
+import re
+
+with open('app/src/main/java/com/example/ui/settings/omniroute/AiManagerViewModel.kt', 'r') as f:
+    content = f.read()
+
+new_content = """package com.example.ui.settings.omniroute
 
 import android.app.Application
 import android.util.Log
@@ -85,40 +90,15 @@ class AiManagerViewModel(application: Application) : AndroidViewModel(applicatio
                         val response = httpClient.newCall(reqBuilder.build()).execute()
                         val responseBody = response.body?.string() ?: ""
                         if (response.isSuccessful) {
-                            val modelsResp = try { modelsAdapter.fromJson(responseBody) } catch(e: Exception) { null }
-                            var entities = modelsResp?.data?.map { 
-                                AiModelEntity(providerId = provider.id, modelId = it.id) 
-                            } ?: emptyList()
-                            
-                            if (entities.isEmpty()) {
-                                val fallbacks = when(provider.id) {
-                                    "anthropic" -> listOf("claude-3-5-sonnet-20240620", "claude-3-opus-20240229")
-                                    "google_ai_studio" -> listOf("gemini-1.5-pro-latest", "gemini-1.5-flash-latest")
-                                    "openai" -> listOf("gpt-4o", "gpt-4o-mini")
-                                    "openrouter" -> listOf("meta-llama/llama-3-8b-instruct:free")
-                                    "groq" -> listOf("llama3-8b-8192")
-                                    else -> emptyList()
+                            val modelsResp = modelsAdapter.fromJson(responseBody)
+                            modelsResp?.data?.let { modelList ->
+                                val entities = modelList.map { 
+                                    AiModelEntity(providerId = provider.id, modelId = it.id) 
                                 }
-                                entities = fallbacks.map { AiModelEntity(providerId = provider.id, modelId = it) }
-                            }
-                            
-                            aiModelDao.deleteModelsForProvider(provider.id)
-                            if (entities.isNotEmpty()) {
+                                aiModelDao.deleteModelsForProvider(provider.id)
                                 aiModelDao.insertModels(entities)
                             }
                         } else {
-                            val fallbacks = when(provider.id) {
-                                "anthropic" -> listOf("claude-3-5-sonnet-20240620", "claude-3-opus-20240229")
-                                "google_ai_studio" -> listOf("gemini-1.5-pro-latest", "gemini-1.5-flash-latest")
-                                "openai" -> listOf("gpt-4o", "gpt-4o-mini")
-                                "openrouter" -> listOf("meta-llama/llama-3-8b-instruct:free")
-                                "groq" -> listOf("llama3-8b-8192")
-                                else -> emptyList()
-                            }
-                            if (fallbacks.isNotEmpty()) {
-                                aiModelDao.deleteModelsForProvider(provider.id)
-                                aiModelDao.insertModels(fallbacks.map { AiModelEntity(providerId = provider.id, modelId = it) })
-                            }
                             Log.e("AiManager", "Failed to fetch models for ${provider.id}: ${response.code} $responseBody")
                         }
                     } catch (e: Exception) {
@@ -170,3 +150,7 @@ class AiManagerViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 }
+"""
+
+with open('app/src/main/java/com/example/ui/settings/omniroute/AiManagerViewModel.kt', 'w') as f:
+    f.write(new_content)
