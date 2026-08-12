@@ -21,3 +21,8 @@
 * Action: Overwrote the file directly via create_file to prevent variable interpolation issues.
 * Verification: Compiling now.
 * Build succeeded. Tested locally and active models fetch via proxy perfectly.
+* 2026-08-11T14:40:00-07:00
+* Request: Fix the blank bubble issue by handling 404 API errors properly and switching the Gemini API endpoint to the OpenAI-compatible version.
+* Touched: app/src/main/java/com/example/engine/omniroute/service/OmniRouteProxyServer.kt
+* Action: Updated the Gemini route to use `ProviderFormat.OPENAI` with the `generativelanguage.googleapis.com/v1beta/openai/chat/completions` endpoint. Added a check for `!response.isSuccessful` in the proxy to capture error messages, generating a valid `OmniResponse` containing the error details via Moshi to ensure proper JSON escaping, preventing blank bubbles.
+* Verification: Verified that the project successfully compiled with `gradle :app:assembleDebug`.

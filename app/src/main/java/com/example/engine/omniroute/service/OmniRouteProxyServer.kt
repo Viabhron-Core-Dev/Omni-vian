@@ -52,9 +52,9 @@ class OmniRouteProxyServer(port: Int, private val context: Context) : NanoHTTPD(
                 when {
                     modelStr.contains("Gemini", ignoreCase = true) -> {
                         providerId = "google_ai_studio"
-                        targetFormat = TranslationEngine.ProviderFormat.GEMINI
-                        actualModelName = if (modelStr.contains("Flash")) "models/gemini-1.5-flash" else "models/gemini-1.5-pro"
-                        baseUrl = "https://generativelanguage.googleapis.com/v1beta/" + actualModelName + ":generateContent"
+                        targetFormat = TranslationEngine.ProviderFormat.OPENAI
+                        actualModelName = if (modelStr.contains("Flash")) "gemini-1.5-flash" else "gemini-1.5-pro"
+                        baseUrl = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
                     }
                     modelStr.contains("GPT", ignoreCase = true) -> {
                         providerId = "openai"
@@ -95,9 +95,9 @@ class OmniRouteProxyServer(port: Int, private val context: Context) : NanoHTTPD(
                     else -> {
                         // Fallback to Gemini for now
                         providerId = "google_ai_studio"
-                        targetFormat = TranslationEngine.ProviderFormat.GEMINI
-                        actualModelName = "models/gemini-1.5-pro"
-                        baseUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent"
+                        targetFormat = TranslationEngine.ProviderFormat.OPENAI
+                        actualModelName = "gemini-1.5-pro"
+                        baseUrl = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
                     }
                 }
                 
@@ -106,7 +106,8 @@ class OmniRouteProxyServer(port: Int, private val context: Context) : NanoHTTPD(
                 val key = activeKeys.firstOrNull { it.isActive }
                 
                 if (key == null && providerId != "local_gguf") {
-                    val errorJson = """{"choices":[{"message":{"role":"assistant","content":"Error: No active API key found for $providerId"}}]}"""
+                    val errorResponse = com.example.ui.chat.OmniResponse(choices = listOf(com.example.ui.chat.OmniChoice(message = com.example.ui.chat.OmniMessage(role = "assistant", content = "Error: No active API key found for $providerId"))))
+                    val errorJson = Moshi.Builder().build().adapter(com.example.ui.chat.OmniResponse::class.java).toJson(errorResponse)
                     return newFixedLengthResponse(Response.Status.OK, "application/json", errorJson)
                 }
                 
@@ -143,6 +144,13 @@ class OmniRouteProxyServer(port: Int, private val context: Context) : NanoHTTPD(
                 val response = httpClient.newCall(req).execute()
                 val responseBody = response.body?.string() ?: ""
                 
+                if (!response.isSuccessful) {
+                    LogKeeper.log("Proxy Error", "API Error from $providerId", "Code: ${response.code}\nBody: $responseBody")
+                    val errorResponse = com.example.ui.chat.OmniResponse(choices = listOf(com.example.ui.chat.OmniChoice(message = com.example.ui.chat.OmniMessage(role = "assistant", content = "API Error ${response.code}: $responseBody"))))
+                    val errorJson = Moshi.Builder().build().adapter(com.example.ui.chat.OmniResponse::class.java).toJson(errorResponse)
+                    return newFixedLengthResponse(Response.Status.OK, "application/json", errorJson)
+                }
+                
                 LogKeeper.log("Proxy", "Received response from $providerId", "Code: ${response.code}\nBody length: ${responseBody.length}")
                 
                 val standardResponse = TranslationEngine.translateResponse(responseBody, targetFormat)
@@ -154,7 +162,8 @@ class OmniRouteProxyServer(port: Int, private val context: Context) : NanoHTTPD(
             } catch (e: Exception) {
                 Log.e("OmniRouteProxyServer", "Error processing request", e)
                 LogKeeper.log("Proxy Error", "Exception in proxy", e.message ?: "Unknown error", e.stackTraceToString())
-                val errorJson = """{"choices":[{"message":{"role":"assistant","content":"Proxy Exception: ${e.message}"}}]}"""
+                val errorResponse = com.example.ui.chat.OmniResponse(choices = listOf(com.example.ui.chat.OmniChoice(message = com.example.ui.chat.OmniMessage(role = "assistant", content = "Proxy Exception: ${e.message}"))))
+                val errorJson = Moshi.Builder().build().adapter(com.example.ui.chat.OmniResponse::class.java).toJson(errorResponse)
                 return newFixedLengthResponse(Response.Status.OK, "application/json", errorJson)
             }
         }
