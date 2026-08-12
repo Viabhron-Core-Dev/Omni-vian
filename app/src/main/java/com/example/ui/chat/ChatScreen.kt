@@ -273,7 +273,19 @@ fun ChatScreen(
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(selectedModel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
+                                val displayInitials = remember(selectedModel) {
+                                    if (selectedModel == "Select Model" || selectedModel.startsWith("No models") || selectedModel.startsWith("Loading")) {
+                                        "AI"
+                                    } else if (selectedModel.contains("/")) {
+                                        val parts = selectedModel.split("/", limit = 2)
+                                        val p = parts[0].firstOrNull()?.uppercaseChar() ?: '?'
+                                        val m = parts[1].firstOrNull()?.uppercaseChar() ?: '?'
+                                        "$p / $m"
+                                    } else {
+                                        selectedModel.take(2).uppercase()
+                                    }
+                                }
+                                Text(displayInitials, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Icon(Icons.Default.ArrowDropDown, contentDescription = "Select Model", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurface)
                             }
