@@ -1,4 +1,4 @@
-package com.example.ui.settings.omniroute
+content = """package com.example.ui.settings.omniroute
 
 import android.app.Application
 import android.util.Log
@@ -164,3 +164,7 @@ class AiManagerViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 }
+"""
+
+with open('app/src/main/java/com/example/ui/settings/omniroute/AiManagerViewModel.kt', 'w') as f:
+    f.write(content)
