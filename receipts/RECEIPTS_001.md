@@ -43,3 +43,29 @@
 * Edited `GlobalSettingsScreen.kt` to add Memory Modules to `coreSetupItems`, `OmniRootApp.kt` to handle `"memory_modules"` route, and `SettingsPlaceholders.kt` to define `MemoryModulesSettingsContent`.
 * This sets up the UI placeholder for Phase 11 modular memory architectures.
 * Verified via local compilation build (`compile_applet`).
+
+* 2026-08-13
+* Implement Phase 9.8 (Local AI / .gguf file management).
+* Added `description` field to `AiModelEntity` via a Room Migration (Version 8 -> 9) to persist the Android Storage Access Framework (SAF) URI.
+* Added "Import .gguf" button in `AiManagerPanelScreen.kt` using `rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument())`.
+* Added persistent file URI permission request to guarantee offline loading works across app restarts.
+* Added `addLocalModel` to `AiManagerViewModel.kt` to inject the imported `.gguf` into the database.
+* Disabled the automatic fallback overwrite in `refreshModels()` so manual local models aren't erased on network refresh.
+* Verified via local compilation build (`compile_applet`).
+
+* 2026-08-13
+* Implement Phase 9.9 (The `llama.cpp` JNI Wrapper Foundation).
+* Edited `build.gradle.kts` to enable `externalNativeBuild` with CMake targeting modern CPU architectures (arm64-v8a, x86_64).
+* Created `app/src/main/cpp/CMakeLists.txt` to define the shared library build configuration.
+* Created `app/src/main/cpp/llama_bridge.cpp` implementing the C++ JNI bridge functions (`loadModel`, `predict`). Currently stubbed to verify NDK plumbing without timing out the cloud build environment.
+* Created `app/src/main/java/com/example/engine/omniroot/local/LlamaEngine.kt` to load the `llama_bridge` shared library and expose the `external` Kotlin functions.
+* Verified via local compilation build (`compile_applet`). The C++ code successfully compiled and linked to the Android APK.
+
+* 2026-08-13
+* Implement Phase 9.10 (Local Inference Loop via `llama.cpp`).
+* Added `LlamaEngine.kt` to handle Kotlin-side loading of models safely (checking OS RAM limits before allocating memory for `.gguf` weights to prevent out-of-memory crashes).
+* Expanded `llama_bridge.cpp` with the real `llama.h` backend code (`llama_backend_init`, `llama_load_model_from_file`, etc.) wrapped in `#ifdef USE_REAL_LLAMA`.
+* Provided a mock implementation fallback for local AI Studio container compilation to prevent CMake timeouts from building the massive `ggml` tensor framework.
+* Configured `CMakeLists.txt` to dynamically fetch and build `ggerganov/llama.cpp` from GitHub when the `USE_REAL_LLAMA` option is passed by CI.
+* Patched `OmniRootProxyServer.kt` to natively intercept `local_gguf` inference requests, pipe them directly into C++, and return the generated text natively as a simulated API payload, completely bypassing network usage.
+* Verified via local compilation build (`compile_applet`).

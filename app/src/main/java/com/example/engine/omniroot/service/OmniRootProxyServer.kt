@@ -7,6 +7,9 @@ import java.io.IOException
 import com.example.engine.omniroot.pipeline.TranslationEngine
 import com.example.engine.omniroot.pipeline.CompressionEngine
 import com.example.ui.chat.OmniRequest
+import com.example.ui.chat.OmniResponse
+import com.example.ui.chat.OmniMessage
+import com.example.ui.chat.OmniChoice
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.runBlocking
@@ -107,7 +110,39 @@ class OmniRootProxyServer(port: Int, private val context: Context) : NanoHTTPD("
                         continue // Try next in fallback chain
                     }
 
+
                     val updatedRequest = request.copy(model = actualModelName)
+                    
+                    if (providerId == "local_gguf") {
+                        LogKeeper.log("Proxy", "Executing local inference via llama.cpp for model: $actualModelName", "")
+                        
+                        var combinedInputText = ""
+                        updatedRequest.messages.forEach { combinedInputText += it.content + "\n" }
+                        
+                        // We use the model name as the URI since we stored it in the DB (or could fetch it)
+                        val llama = com.example.engine.omniroot.local.LlamaEngine(context)
+                        val loaded = llama.loadModelSafely(actualModelName)
+                        
+                        if (loaded) {
+                            val prediction = llama.predict(combinedInputText)
+                            llama.unloadModel()
+                            
+                            val localResponse = OmniResponse(
+                                choices = listOf(
+                                    OmniChoice(
+                                        message = OmniMessage("assistant", prediction)
+                                    )
+                                )
+                            )
+                            val jsonLocalResponse = moshi.adapter(OmniResponse::class.java).toJson(localResponse)
+                            return newFixedLengthResponse(Response.Status.OK, "application/json", jsonLocalResponse)
+                        } else {
+                            lastErrorResponse = "Local model failed to load (OOM or File Not Found)"
+                            lastCode = 500
+                            continue
+                        }
+                    }
+
                     
                     // Compress and Translate
                     // In a real scenario we might compress messages here. For now just estimate tokens.

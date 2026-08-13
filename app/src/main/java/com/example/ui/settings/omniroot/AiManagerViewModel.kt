@@ -104,7 +104,8 @@ class AiManagerViewModel(application: Application) : AndroidViewModel(applicatio
                             "openrouter" -> listOf("meta-llama/llama-3-8b-instruct:free")
                             "groq" -> listOf("llama3-8b-8192", "whisper-large-v3")
                             "together_ai" -> listOf("meta-llama/Llama-3-8b-chat-hf")
-                            "local_gguf" -> listOf("local-model")
+                            // local_gguf should not be hardcoded since we parse actual files
+                            "local_gguf" -> emptyList()
                             else -> emptyList()
                         }
                         if (fallbacks.isNotEmpty()) {
@@ -155,6 +156,26 @@ class AiManagerViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+
+
+    fun addLocalModel(fileName: String, uriString: String) {
+        viewModelScope.launch {
+            val (iType, oType) = inferModelTypes(fileName)
+            aiModelDao.insertModels(
+                listOf(
+                    com.example.engine.db.AiModelEntity(
+                        providerId = "local_gguf",
+                        modelId = fileName,
+                        
+                        description = uriString,
+                        inputType = iType,
+                        outputType = oType
+                    )
+                )
+            )
+            refreshModels()
+        }
+    }
 
     fun addMockKey(providerId: String) {
         viewModelScope.launch {
