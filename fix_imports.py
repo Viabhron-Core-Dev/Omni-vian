@@ -1,16 +1,17 @@
-with open('app/src/main/java/com/example/ui/chat/GeminiClient.kt', 'r') as f:
+with open('app/src/main/java/com/example/ui/settings/omniroute/AiManagerPanelScreen.kt', 'r') as f:
     lines = f.readlines()
 
 new_lines = []
-imports_seen = set()
-
+imports = []
 for line in lines:
     if line.startswith('import '):
-        if line in imports_seen:
-            continue
-        imports_seen.add(line)
-    new_lines.append(line)
+        imports.append(line)
+    elif line.startswith('package '):
+        new_lines.append(line)
+        new_lines.extend(imports)
+        imports = []
+    else:
+        new_lines.append(line)
 
-with open('app/src/main/java/com/example/ui/chat/GeminiClient.kt', 'w') as f:
+with open('app/src/main/java/com/example/ui/settings/omniroute/AiManagerPanelScreen.kt', 'w') as f:
     f.writelines(new_lines)
-

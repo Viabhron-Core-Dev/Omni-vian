@@ -18,15 +18,19 @@ fun ChatMessage.toEntity(sessionId: String): ChatMessageEntity {
         appActionsJson.put(action)
     }
 
+
     return ChatMessageEntity(
         id = this.id,
         sessionId = sessionId,
         text = this.text,
         role = this.role,
+        modelName = this.modelName,
+        providerId = this.providerId,
         editedFilesJson = editedFilesJson.toString(),
         appActionsJson = appActionsJson.toString(),
         timestamp = System.currentTimeMillis()
     )
+
 }
 
 fun ChatMessageEntity.toDomainModel(): ChatMessage {
@@ -51,11 +55,15 @@ fun ChatMessageEntity.toDomainModel(): ChatMessage {
         // Ignore JSON parsing errors
     }
 
+
     return ChatMessage(
         id = this.id,
         text = this.text,
         role = this.role,
+        modelName = this.modelName,
+        providerId = this.providerId,
         editedFiles = editedFiles,
         appActions = appActions
     )
+
 }

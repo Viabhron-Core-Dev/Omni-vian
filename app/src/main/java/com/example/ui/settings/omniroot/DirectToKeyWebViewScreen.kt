@@ -1,4 +1,4 @@
-package com.example.ui.settings.omniroute
+package com.example.ui.settings.omniroot
 
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent

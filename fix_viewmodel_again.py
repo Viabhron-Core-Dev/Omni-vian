@@ -47,9 +47,16 @@ replacement = """                    suspend fun applyFallbacks() {
                                 aiModelDao.deleteModelsForProvider(provider.id)
                                 aiModelDao.insertModels(entities)
                             }
-                        } else {"""
+                        } else {
+                            Log.e("AiManager", "Failed to fetch models for ${provider.id}: ${response.code} $responseBody")
+                            applyFallbacks()
+                        }
+                    } catch (e: Exception) {
+                        Log.e("AiManager", "Exception fetching models for ${provider.id}", e)
+                        applyFallbacks()
+                    }"""
 
-content = re.sub(r'                    suspend fun applyFallbacks\(\) \{.*?                        \} else \{', replacement, content, flags=re.DOTALL)
+content = re.sub(r'                    suspend fun applyFallbacks\(\) \{.*?applyFallbacks\(\)\n                    \}', replacement, content, flags=re.DOTALL)
 
 with open('app/src/main/java/com/example/ui/settings/omniroute/AiManagerViewModel.kt', 'w') as f:
     f.write(content)

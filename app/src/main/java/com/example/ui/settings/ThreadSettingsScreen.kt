@@ -158,7 +158,7 @@ fun AgentsSettingsContent() {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Active Agents in this Thread", style = MaterialTheme.typography.titleSmall)
         ListItem(
-            headlineContent = { Text("OmniRoute (Default)") },
+            headlineContent = { Text("OmniRoot (Default)") },
             supportingContent = { Text("Main coding assistant") },
             trailingContent = { Switch(checked = true, onCheckedChange = {}) }
         )

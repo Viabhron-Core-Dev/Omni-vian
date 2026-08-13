@@ -39,6 +39,7 @@ fun GlobalSettingsScreen(
         ) {
             item {
                 SettingsCategory("Core Setup")
+                SettingsItem("OmniRoot", "Local proxy and model settings", Icons.Default.Router) { onNavigateTo("settings/omniroot") }
                 SettingsItem("Agents", "Manage built agents", Icons.Default.SmartToy) { onNavigateTo("settings/agents") }
                 SettingsItem("Skills", "Manage shared skills", Icons.Default.Psychology) { onNavigateTo("settings/skills") }
                 SettingsItem("Tools", "Manage tool permissions", Icons.Default.Build) { onNavigateTo("settings/tools") }
@@ -59,7 +60,6 @@ fun GlobalSettingsScreen(
                 SettingsItem("Permissions", "System permissions used", Icons.Default.Security) { onNavigateTo("settings/permissions") }
                 SettingsItem("Font & Typography", "App-wide font settings", Icons.Default.FontDownload) { onNavigateTo("settings/font") }
                 SettingsItem("Encrypted Backup", "Backup and restore your data securely", Icons.Default.Lock) { onNavigateTo("settings/backup") }
-                SettingsItem("OmniRoute", "Local proxy settings", Icons.Default.Router) { onNavigateTo("settings/omniroute") }
                 SettingsItem("Log Keeper", "View and export app logs", Icons.Default.BugReport) { onNavigateTo("log_keeper") }
             }
         }

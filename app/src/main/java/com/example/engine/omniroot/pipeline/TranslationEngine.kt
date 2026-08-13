@@ -1,4 +1,4 @@
-package com.example.engine.omniroute.pipeline
+package com.example.engine.omniroot.pipeline
 
 import com.example.ui.chat.OmniMessage
 import com.example.ui.chat.OmniRequest

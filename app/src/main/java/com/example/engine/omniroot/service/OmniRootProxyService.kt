@@ -1,4 +1,4 @@
-package com.example.engine.omniroute.service
+package com.example.engine.omniroot.service
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -11,11 +11,11 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
 
-class OmniRouteProxyService : Service() {
+class OmniRootProxyService : Service() {
 
-    private var proxyServer: OmniRouteProxyServer? = null
+    private var proxyServer: OmniRootProxyServer? = null
     private val NOTIFICATION_ID = 8080
-    private val CHANNEL_ID = "OmniRouteProxyChannel"
+    private val CHANNEL_ID = "OmniRootProxyChannel"
 
     override fun onCreate() {
         super.onCreate()
@@ -29,7 +29,7 @@ class OmniRouteProxyService : Service() {
         }
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("OmniRoute AI Manager")
+            .setContentTitle("OmniRoot AI Manager")
             .setContentText("AI Manager Active on Port 8080")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(true)
@@ -43,7 +43,7 @@ class OmniRouteProxyService : Service() {
 
         if (proxyServer == null) {
             try {
-                proxyServer = OmniRouteProxyServer(8080, this)
+                proxyServer = OmniRootProxyServer(8080, this)
                 proxyServer?.start(5000, false)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -65,7 +65,7 @@ class OmniRouteProxyService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "OmniRoute Proxy Service"
+            val name = "OmniRoot Proxy Service"
             val descriptionText = "Keeps the local AI proxy running in the background"
             val importance = NotificationManager.IMPORTANCE_LOW
             val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {

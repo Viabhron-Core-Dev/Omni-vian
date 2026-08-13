@@ -5,7 +5,7 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "model_ratings")
 data class ModelRatingEntity(
-    @PrimaryKey val id: String,
+    @PrimaryKey val messageId: String,
     val modelName: String,
     val providerId: String,
     val isPositive: Boolean,

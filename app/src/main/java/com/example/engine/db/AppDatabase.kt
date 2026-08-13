@@ -5,6 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,7 +24,7 @@ import com.example.engine.db.ProviderPrepopulator
     ModelRatingEntity::class,
     RequestLogEntity::class,
     AiModelEntity::class
-], version = 5, exportSchema = false)
+], version = 8, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun workspaceConfigDao(): WorkspaceConfigDao
@@ -35,11 +36,32 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun fallbackChainDao(): FallbackChainDao
     abstract fun metricsDao(): MetricsDao
     abstract fun aiModelDao(): AiModelDao
+    abstract fun modelRatingDao(): ModelRatingDao
+
 
     companion object {
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE ai_models ADD COLUMN inputType TEXT NOT NULL DEFAULT 'TEXT'")
+                db.execSQL("ALTER TABLE ai_models ADD COLUMN outputType TEXT NOT NULL DEFAULT 'TEXT'")
+            }
+        }
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE chat_messages ADD COLUMN modelName TEXT")
+                db.execSQL("ALTER TABLE chat_messages ADD COLUMN providerId TEXT")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `model_ratings` (`id` TEXT NOT NULL, `modelName` TEXT NOT NULL, `providerId` TEXT NOT NULL, `isPositive` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+            }
+        }
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS `model_ratings`")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `model_ratings` (`messageId` TEXT NOT NULL, `modelName` TEXT NOT NULL, `providerId` TEXT NOT NULL, `isPositive` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL, PRIMARY KEY(`messageId`))")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
-
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -48,7 +70,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "omnivian_database"
                 )
                 .addCallback(DatabaseCallback())
-                .fallbackToDestructiveMigration()
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                 .build()
                 INSTANCE = instance
                 instance

@@ -7,8 +7,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.example.engine.fs.LocalFileManager
-import com.example.engine.omniroute.service.OmniRouteProxyService
-import com.example.ui.OmniRouteApp
+import com.example.engine.omniroot.service.OmniRootProxyService
+import com.example.ui.OmniRootApp
 import com.example.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
@@ -16,7 +16,7 @@ class MainActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     LocalFileManager.init(applicationContext)
     
-    val serviceIntent = Intent(this, OmniRouteProxyService::class.java)
+    val serviceIntent = Intent(this, OmniRootProxyService::class.java)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         startForegroundService(serviceIntent)
     } else {
@@ -26,7 +26,7 @@ class MainActivity : ComponentActivity() {
     enableEdgeToEdge()
     setContent {
       MyApplicationTheme {
-        OmniRouteApp()
+        OmniRootApp()
       }
     }
   }

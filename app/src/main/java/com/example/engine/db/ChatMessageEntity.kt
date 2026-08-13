@@ -12,7 +12,10 @@ data class ChatMessageEntity(
     val sessionId: String,
     val text: String,
     val role: MessageRole,
+    val modelName: String? = null,
+    val providerId: String? = null,
     val editedFilesJson: String,
+
     val appActionsJson: String,
     val timestamp: Long
 )

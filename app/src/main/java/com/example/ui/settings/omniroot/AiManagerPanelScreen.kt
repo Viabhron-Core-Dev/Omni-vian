@@ -1,9 +1,154 @@
-import re
+package com.example.ui.settings.omniroot
 
-with open('app/src/main/java/com/example/ui/settings/omniroute/AiManagerPanelScreen.kt', 'r') as f:
-    content = f.read()
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.clickable
 
-replacement = """fun ModelsTab(viewModel: AiManagerViewModel) {
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AiManagerPanelScreen(
+    onNavigateBack: () -> Unit,
+    onAddKeyClick: (String) -> Unit,
+    viewModel: AiManagerViewModel = viewModel()
+) {
+    var selectedTabIndex by remember { mutableStateOf(0) }
+    val tabs = listOf("Directory", "Active Keys", "Available Models", "Metrics", "Model Rater", "Translator")
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("OmniRoot AI Manager") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            ScrollableTabRow(
+                selectedTabIndex = selectedTabIndex,
+                edgePadding = 8.dp
+            ) {
+                tabs.forEachIndexed { index, title ->
+                    Tab(
+                        selected = selectedTabIndex == index,
+                        onClick = { selectedTabIndex = index },
+                        text = { Text(title) }
+                    )
+                }
+            }
+
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                when (selectedTabIndex) {
+                    0 -> DirectoryTab(viewModel, onAddKeyClick)
+                    1 -> ActiveKeysTab(viewModel)
+                    2 -> ModelsTab(viewModel)
+                    3 -> MetricsTab(viewModel)
+                    4 -> ModelRaterTab(viewModel)
+                    5 -> TranslatorTab()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CenterTextTab(text: String) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        Text(text)
+    }
+}
+
+@Composable
+fun DirectoryTab(viewModel: AiManagerViewModel, onAddKeyClick: (String) -> Unit) {
+    val providers by viewModel.providers.collectAsState()
+    
+    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+        items(providers) { provider ->
+            Card(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                ListItem(
+                    headlineContent = { Text(provider.name) },
+                    supportingContent = { Text(provider.description) },
+                    leadingContent = { Icon(Icons.Default.Business, contentDescription = null) },
+                    trailingContent = {
+                        IconButton(onClick = { onAddKeyClick(provider.id) }) {
+                            Icon(Icons.Default.Add, contentDescription = "Add Key")
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ActiveKeysTab(viewModel: AiManagerViewModel) {
+    val keys by viewModel.activeKeys.collectAsState()
+    val providers by viewModel.providers.collectAsState()
+    
+    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+        if (keys.isEmpty()) {
+            item { CenterTextTab("No active keys configured.") }
+        } else {
+            items(keys) { key ->
+                val provider = providers.find { it.id == key.providerId }?.name ?: key.providerId
+                Card(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                    ListItem(
+                        headlineContent = { Text("${key.alias} ($provider)") },
+                        supportingContent = { Text(key.keyMasked) },
+                        leadingContent = { Icon(Icons.Default.Key, contentDescription = null) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MetricsTab(viewModel: AiManagerViewModel) {
+    val tokens by viewModel.totalTokens.collectAsState()
+    val requests by viewModel.totalRequests.collectAsState()
+    val cost by viewModel.totalCost.collectAsState()
+    
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Card(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            ListItem(
+                headlineContent = { Text("Total Tokens Used") },
+                trailingContent = { Text((tokens ?: 0).toString()) }
+            )
+        }
+        Card(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            ListItem(
+                headlineContent = { Text("Total Requests") },
+                trailingContent = { Text(requests.toString()) }
+            )
+        }
+        Card(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            ListItem(
+                headlineContent = { Text("Estimated Cost") },
+                trailingContent = { Text(String.format("$%.4f", cost ?: 0.0)) }
+            )
+        }
+    }
+}
+
+
+@Composable
+fun ModelsTab(viewModel: AiManagerViewModel) {
     val modelEntities by viewModel.availableModelEntities.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
     var expandedFolders by remember { mutableStateOf(setOf<String>()) }
@@ -162,12 +307,39 @@ replacement = """fun ModelsTab(viewModel: AiManagerViewModel) {
             }
         }
     }
-}"""
+}
 
-content = re.sub(r'fun ModelsTab\(viewModel: AiManagerViewModel\) \{.*', replacement, content, flags=re.DOTALL)
-
-# Also rename OmniRoute to OmniRoot
-content = content.replace('OmniRoute AI Manager', 'OmniRoot AI Manager')
-
-with open('app/src/main/java/com/example/ui/settings/omniroute/AiManagerPanelScreen.kt', 'w') as f:
-    f.write(content)
+@Composable
+fun ModelRaterTab(viewModel: AiManagerViewModel) {
+    val ratings by viewModel.modelRatings.collectAsState()
+    
+    if (ratings.isEmpty()) {
+        CenterTextTab("No ratings yet. Rate messages in Chat!")
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(ratings.sortedByDescending { it.upvotes - it.downvotes }) { stat ->
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    ListItem(
+                        headlineContent = { Text(stat.modelName) },
+                        supportingContent = { Text(stat.providerId) },
+                        trailingContent = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.ThumbUp, contentDescription = "Upvotes", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(stat.upvotes.toString())
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Icon(Icons.Default.ThumbDown, contentDescription = "Downvotes", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(stat.downvotes.toString())
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    }
+}

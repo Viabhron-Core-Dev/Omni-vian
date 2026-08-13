@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OmniRouteApp() {
+fun OmniRootApp() {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var currentTab by remember { mutableStateOf(AppTab.CHAT) }
@@ -206,17 +206,17 @@ fun OmniRouteApp() {
                     }
                 )
             }
-            composable("settings/omniroute") {
-                com.example.ui.settings.omniroute.AiManagerPanelScreen(
+            composable("settings/omniroot") {
+                com.example.ui.settings.omniroot.AiManagerPanelScreen(
                     onNavigateBack = { navController.popBackStack() },
                     onAddKeyClick = { providerId ->
-                        navController.navigate("settings/omniroute/add_key/$providerId")
+                        navController.navigate("settings/omniroot/add_key/$providerId")
                     }
                 )
             }
-            composable("settings/omniroute/add_key/{providerId}") { backStackEntry ->
+            composable("settings/omniroot/add_key/{providerId}") { backStackEntry ->
                 val providerId = backStackEntry.arguments?.getString("providerId") ?: return@composable
-                com.example.ui.settings.omniroute.DirectToKeyWebViewScreen(
+                com.example.ui.settings.omniroot.DirectToKeyWebViewScreen(
                     providerId = providerId,
                     onNavigateBack = { navController.popBackStack() }
                 )

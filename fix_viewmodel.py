@@ -3,45 +3,35 @@ import re
 with open('app/src/main/java/com/example/ui/settings/omniroute/AiManagerViewModel.kt', 'r') as f:
     content = f.read()
 
-replacement = """                        if (response.isSuccessful) {
-                            val modelsResp = try { modelsAdapter.fromJson(responseBody) } catch(e: Exception) { null }
-                            var entities = modelsResp?.data?.map { 
-                                AiModelEntity(providerId = provider.id, modelId = it.id) 
-                            } ?: emptyList()
-                            
-                            if (entities.isEmpty()) {
-                                val fallbacks = when(provider.id) {
-                                    "anthropic" -> listOf("claude-3-5-sonnet-20240620", "claude-3-opus-20240229")
-                                    "google_ai_studio" -> listOf("gemini-1.5-pro-latest", "gemini-1.5-flash-latest")
-                                    "openai" -> listOf("gpt-4o", "gpt-4o-mini")
-                                    "openrouter" -> listOf("meta-llama/llama-3-8b-instruct:free")
-                                    "groq" -> listOf("llama3-8b-8192")
-                                    else -> emptyList()
-                                }
-                                entities = fallbacks.map { AiModelEntity(providerId = provider.id, modelId = it) }
-                            }
-                            
-                            aiModelDao.deleteModelsForProvider(provider.id)
-                            if (entities.isNotEmpty()) {
-                                aiModelDao.insertModels(entities)
-                            }
-                        } else {
-                            val fallbacks = when(provider.id) {
-                                "anthropic" -> listOf("claude-3-5-sonnet-20240620", "claude-3-opus-20240229")
-                                "google_ai_studio" -> listOf("gemini-1.5-pro-latest", "gemini-1.5-flash-latest")
-                                "openai" -> listOf("gpt-4o", "gpt-4o-mini")
-                                "openrouter" -> listOf("meta-llama/llama-3-8b-instruct:free")
-                                "groq" -> listOf("llama3-8b-8192")
-                                else -> emptyList()
-                            }
-                            if (fallbacks.isNotEmpty()) {
-                                aiModelDao.deleteModelsForProvider(provider.id)
-                                aiModelDao.insertModels(fallbacks.map { AiModelEntity(providerId = provider.id, modelId = it) })
-                            }
-                            Log.e("AiManager", "Failed to fetch models for ${provider.id}: ${response.code} $responseBody")
-                        }"""
+replacement = """
+    val availableModels = aiModelDao.getAllModels().map { models ->
+        val chatModels = models.filter { it.outputType == "TEXT" && it.inputType != "AUDIO" }
+        if (chatModels.isEmpty()) {
+            listOf("No models fetched (Add keys and Refresh)")
+        } else {
+            chatModels.map { "${it.providerId}/${it.modelId}" }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), listOf("Loading..."))
 
-content = re.sub(r'                        if \(response\.isSuccessful\).*?Log\.e\("AiManager", "Failed to fetch models for \$\{provider\.id\}: \$\{response\.code\} \$responseBody"\)\n                        \}', replacement, content, flags=re.DOTALL)
+    val availableModelEntities = aiModelDao.getAllModels()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private fun inferModelTypes(modelId: String): Pair<String, String> {
+        val lowerId = modelId.lowercase()
+        return when {
+            lowerId.contains("tts") || lowerId.contains("speech") -> "TEXT" to "AUDIO"
+            lowerId.contains("whisper") -> "AUDIO" to "TEXT"
+            lowerId.contains("embed") -> "TEXT" to "EMBEDDING"
+            lowerId.contains("dall-e") || lowerId.contains("midjourney") || lowerId.contains("image") -> "TEXT" to "IMAGE"
+            lowerId.contains("antigravity") || lowerId.contains("unsupported") -> "TEXT" to "UNSUPPORTED"
+            lowerId.contains("vision") || lowerId.contains("gpt-4o") || lowerId.contains("claude-3-5-sonnet") || lowerId.contains("gemini-1.5") -> "MULTIMODAL" to "TEXT"
+            else -> "TEXT" to "TEXT"
+        }
+    }
+    
+    val totalTokens"""
+
+content = re.sub(r'    val availableModels =.*?    val totalTokens', replacement, content, flags=re.DOTALL)
 
 with open('app/src/main/java/com/example/ui/settings/omniroute/AiManagerViewModel.kt', 'w') as f:
     f.write(content)

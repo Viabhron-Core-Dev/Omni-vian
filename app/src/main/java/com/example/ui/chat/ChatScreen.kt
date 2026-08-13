@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Stop
@@ -32,7 +34,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.ui.settings.omniroute.AiManagerViewModel
+import com.example.ui.settings.omniroot.AiManagerViewModel
 import androidx.compose.ui.graphics.Color
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -57,7 +59,10 @@ data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
     val text: String = "",
     val role: MessageRole = MessageRole.USER,
+    val modelName: String? = null,
+    val providerId: String? = null,
     val editedFiles: List<Pair<String, Boolean>> = emptyList(),
+
     val appActions: List<String> = emptyList()
 )
 
@@ -209,7 +214,7 @@ fun ChatScreen(
                 val isLastMessage = index == chatMessages.lastIndex
                 when (message.role) {
                     MessageRole.USER -> UserMessage(text = message.text, isLastMessage = isLastMessage)
-                    MessageRole.AI -> AiMessage(text = message.text, isLastMessage = isLastMessage)
+                    MessageRole.AI -> AiMessage(message = message, isLastMessage = isLastMessage, aiViewModel = aiViewModel)
                     MessageRole.APP_ACTION -> AppActionMessage(
                         editedFiles = message.editedFiles,
                         appActions = message.appActions,
@@ -334,13 +339,24 @@ fun ChatScreen(
                                     saveMessage(msg)
                                     inputText = ""
                                     
-                                    val generatingMessage = ChatMessage(text = "Thinking...", role = MessageRole.AI)
+
+                                    val parts = selectedModel.split("/", limit = 2)
+                                    var currentProvider = parts.getOrNull(0)
+                                    var currentModel = parts.getOrNull(1) ?: selectedModel
+                                    
+                                    if (currentProvider == "Select Model" || currentProvider == null) {
+                                        currentProvider = "google_ai_studio"
+                                        currentModel = "gemini-1.5-pro-latest"
+                                    }
+
+                                    val generatingMessage = ChatMessage(text = "Thinking...", role = MessageRole.AI, modelName = currentModel, providerId = currentProvider)
+
                                     chatMessages.add(generatingMessage)
                                     
                                     isGenerating = true
                                     currentJob = scope.launch {
                                         try {
-                                            val response = com.example.ui.chat.OmniRouteClient.generateContent(
+                                            val response = com.example.ui.chat.OmniRootClient.generateContent(
                                                 chatMessages.filter { it.id != generatingMessage.id },
                                                 selectedModel
                                             )
@@ -354,8 +370,10 @@ fun ChatScreen(
                                                 chatMessages.add(msg)
                                                 saveMessage(msg)
                                             }
+
                                             if (!response.text.isNullOrBlank()) {
-                                                val msg = ChatMessage(text = response.text, role = MessageRole.AI)
+                                                val msg = ChatMessage(text = response.text, role = MessageRole.AI, modelName = currentModel, providerId = currentProvider)
+
                                                 chatMessages.add(msg)
                                                 saveMessage(msg)
                                             }
@@ -530,9 +548,14 @@ fun UserMessage(text: String, isLastMessage: Boolean = true) {
 }
 
 @Composable
-fun AiMessage(text: String, isLastMessage: Boolean = true) {
+fun AiMessage(message: ChatMessage, isLastMessage: Boolean = true, aiViewModel: AiManagerViewModel) {
     val context = LocalContext.current
     var expanded by remember(isLastMessage) { mutableStateOf(isLastMessage) }
+    var userRating by remember(message.id) { mutableStateOf<Boolean?>(null) }
+    val scope = rememberCoroutineScope()
+    
+    val displayName = message.modelName ?: "Gemini Pro Latest"
+    
     Column(modifier = Modifier.fillMaxWidth().padding(end = 32.dp, start = 8.dp)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -540,40 +563,60 @@ fun AiMessage(text: String, isLastMessage: Boolean = true) {
         ) {
             Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Gemini Pro Latest", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(displayName, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         
         if (expanded) {
             Spacer(modifier = Modifier.height(8.dp))
             SelectionContainer {
-                Text(text = text, style = MaterialTheme.typography.bodyLarge)
+                Text(text = message.text, style = MaterialTheme.typography.bodyLarge)
             }
             
             Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Restore,
-                    contentDescription = "Revert",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp).clickable { 
-                        Toast.makeText(context, "Workspace state reverted.", Toast.LENGTH_SHORT).show()
-                    }
-                )
-                Spacer(modifier = Modifier.width(16.dp))
-                Icon(
-                    imageVector = Icons.Default.ContentCopy,
-                    contentDescription = "Copy",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp).clickable { 
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                // Copy Action
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("AI Message", text))
-                        Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                        clipboard.setPrimaryClip(ClipData.newPlainText("AI Response", message.text))
+                        Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
                     }
-                )
+                ) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Copy", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                }
+                
+                // Ratings
+                if (message.modelName != null && message.providerId != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable {
+                            if (userRating != true) {
+                                userRating = true
+                                aiViewModel.rateModel(message.providerId, message.modelName, true, message.id)
+                                Toast.makeText(context, "Rated: Upvote", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.ThumbUp, contentDescription = "Upvote", modifier = Modifier.size(16.dp), tint = if (userRating == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable {
+                            if (userRating != false) {
+                                userRating = false
+                                aiViewModel.rateModel(message.providerId, message.modelName, false, message.id)
+                                Toast.makeText(context, "Rated: Downvote", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.ThumbDown, contentDescription = "Downvote", modifier = Modifier.size(16.dp), tint = if (userRating == false) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
         }
     }

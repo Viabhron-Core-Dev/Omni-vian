@@ -1,4 +1,4 @@
-package com.example.ui.settings.omniroute
+package com.example.ui.settings.omniroot
 
 import android.app.Application
 import android.util.Log
@@ -27,7 +27,10 @@ class AiManagerViewModel(application: Application) : AndroidViewModel(applicatio
     private val apiProviderDao = db.apiProviderDao()
     private val apiKeyDao = db.apiKeyDao()
     private val metricsDao = db.metricsDao()
+
     private val aiModelDao = db.aiModelDao()
+    private val modelRatingDao = db.modelRatingDao()
+
     
     private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
     private val modelsAdapter = moshi.adapter(OpenAiModelsResponse::class.java)
@@ -39,22 +42,45 @@ class AiManagerViewModel(application: Application) : AndroidViewModel(applicatio
     val activeKeys = apiKeyDao.getAllKeys()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+
     val availableModels = aiModelDao.getAllModels().map { models ->
-        if (models.isEmpty()) {
+        val chatModels = models.filter { it.outputType == "TEXT" && it.inputType != "AUDIO" }
+        if (chatModels.isEmpty()) {
             listOf("No models fetched (Add keys and Refresh)")
         } else {
-            models.map { "${it.providerId}/${it.modelId}" }
+            chatModels.map { "${it.providerId}/${it.modelId}" }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), listOf("Loading..."))
 
+    val availableModelEntities = aiModelDao.getAllModels()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private fun inferModelTypes(modelId: String): Pair<String, String> {
+        val lowerId = modelId.lowercase()
+        return when {
+            lowerId.contains("tts") || lowerId.contains("speech") -> "TEXT" to "AUDIO"
+            lowerId.contains("whisper") -> "AUDIO" to "TEXT"
+            lowerId.contains("embed") -> "TEXT" to "EMBEDDING"
+            lowerId.contains("dall-e") || lowerId.contains("midjourney") || lowerId.contains("image") -> "TEXT" to "IMAGE"
+            lowerId.contains("antigravity") || lowerId.contains("unsupported") -> "TEXT" to "UNSUPPORTED"
+            lowerId.contains("vision") || lowerId.contains("gpt-4o") || lowerId.contains("claude-3-5-sonnet") || lowerId.contains("gemini-1.5") -> "MULTIMODAL" to "TEXT"
+            else -> "TEXT" to "TEXT"
+        }
+    }
+    
     val totalTokens = metricsDao.getTotalTokensUsed()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
         
     val totalRequests = metricsDao.getTotalRequestCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
         
+
     val totalCost = metricsDao.getTotalEstimatedCost()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+        
+    val modelRatings = modelRatingDao.getRatingStats()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
 
     fun refreshModels() {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -74,16 +100,19 @@ class AiManagerViewModel(application: Application) : AndroidViewModel(applicatio
                         val fallbacks = when(provider.id) {
                             "anthropic" -> listOf("claude-3-5-sonnet-20240620", "claude-3-opus-20240229")
                             "google_ai_studio" -> listOf("gemini-1.5-pro-latest", "gemini-1.5-flash-latest")
-                            "openai" -> listOf("gpt-4o", "gpt-4o-mini")
+                            "openai" -> listOf("gpt-4o", "gpt-4o-mini", "text-embedding-3-large", "tts-1")
                             "openrouter" -> listOf("meta-llama/llama-3-8b-instruct:free")
-                            "groq" -> listOf("llama3-8b-8192")
+                            "groq" -> listOf("llama3-8b-8192", "whisper-large-v3")
                             "together_ai" -> listOf("meta-llama/Llama-3-8b-chat-hf")
                             "local_gguf" -> listOf("local-model")
                             else -> emptyList()
                         }
                         if (fallbacks.isNotEmpty()) {
                             aiModelDao.deleteModelsForProvider(provider.id)
-                            aiModelDao.insertModels(fallbacks.map { AiModelEntity(providerId = provider.id, modelId = it) })
+                            aiModelDao.insertModels(fallbacks.map { 
+                                val (iType, oType) = inferModelTypes(it)
+                                AiModelEntity(providerId = provider.id, modelId = it, inputType = iType, outputType = oType) 
+                            })
                         }
                     }
                     
@@ -101,7 +130,8 @@ class AiManagerViewModel(application: Application) : AndroidViewModel(applicatio
                         if (response.isSuccessful) {
                             val modelsResp = try { modelsAdapter.fromJson(responseBody) } catch(e: Exception) { null }
                             val entities = modelsResp?.data?.map { 
-                                AiModelEntity(providerId = provider.id, modelId = it.id) 
+                                val (iType, oType) = inferModelTypes(it.id)
+                                AiModelEntity(providerId = provider.id, modelId = it.id, inputType = iType, outputType = oType) 
                             } ?: emptyList()
                             
                             if (entities.isEmpty()) {
@@ -125,13 +155,14 @@ class AiManagerViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+
     fun addMockKey(providerId: String) {
         viewModelScope.launch {
             apiKeyDao.insertKey(
                 ApiKeyEntity(
-                    id = UUID.randomUUID().toString(),
+                    id = java.util.UUID.randomUUID().toString(),
                     providerId = providerId,
-                    alias = "Test Key " + UUID.randomUUID().toString().take(4),
+                    alias = "Test Key",
                     keyMasked = "sk-...abcd",
                     keyValue = "fake-key",
                     isActive = true,
@@ -161,6 +192,20 @@ class AiManagerViewModel(application: Application) : AndroidViewModel(applicatio
                 )
             )
             refreshModels()
+        }
+    }
+
+    fun rateModel(providerId: String, modelName: String, isPositive: Boolean, messageId: String) {
+        viewModelScope.launch {
+            modelRatingDao.insertRating(
+                com.example.engine.db.ModelRatingEntity(
+                    messageId = messageId,
+                    modelName = modelName,
+                    providerId = providerId,
+                    isPositive = isPositive,
+                    timestamp = System.currentTimeMillis()
+                )
+            )
         }
     }
 }

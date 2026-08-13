@@ -38,13 +38,13 @@ data class OmniChoice(
     val message: OmniMessage? = null
 )
 
-data class OmniRouteResult(
+data class OmniRootResult(
     val text: String? = null,
     val actions: List<String> = emptyList(),
     val editedFiles: List<Pair<String, Boolean>> = emptyList()
 )
 
-object OmniRouteClient {
+object OmniRootClient {
     private val client = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
@@ -60,7 +60,7 @@ object OmniRouteClient {
     
     var baseUrl: String = "http://localhost:8080/v1/chat/completions"
 
-    suspend fun generateContent(messages: List<ChatMessage>, model: String = "omni-default"): OmniRouteResult = suspendCancellableCoroutine { continuation ->
+    suspend fun generateContent(messages: List<ChatMessage>, model: String = "omni-default"): OmniRootResult = suspendCancellableCoroutine { continuation ->
         
         val omniMessages = messages.mapNotNull { msg ->
             when (msg.role) {
@@ -96,10 +96,10 @@ object OmniRouteClient {
                 LogKeeper.log("Network Error", "Request failed", "${e.message}", e.stackTraceToString())
                 if (continuation.isCancelled) return
                 if (e.message?.contains("canceled", ignoreCase = true) == true || e.message?.contains("cancelled", ignoreCase = true) == true) {
-                    continuation.resume(OmniRouteResult(text = "Generation stopped."))
+                    continuation.resume(OmniRootResult(text = "Generation stopped."))
                     return
                 }
-                continuation.resume(OmniRouteResult(text = "Network Error: ${e.message}"))
+                continuation.resume(OmniRootResult(text = "Network Error: ${e.message}"))
             }
 
             override fun onResponse(call: Call, response: Response) {
@@ -110,12 +110,12 @@ object OmniRouteClient {
                     try {
                         val omniResponse = responseAdapter.fromJson(responseBody)
                         val text = omniResponse?.choices?.firstOrNull()?.message?.content
-                        continuation.resume(OmniRouteResult(text = text ?: "No response generated."))
+                        continuation.resume(OmniRootResult(text = text ?: "No response generated."))
                     } catch (e: Exception) {
-                         continuation.resume(OmniRouteResult(text = "Error parsing response: ${e.message}"))
+                         continuation.resume(OmniRootResult(text = "Error parsing response: ${e.message}"))
                     }
                 } else {
-                    continuation.resume(OmniRouteResult(text = "API Error: ${response.code} - ${response.message}\n$responseBody"))
+                    continuation.resume(OmniRootResult(text = "API Error: ${response.code} - ${response.message}\n$responseBody"))
                 }
             }
         })

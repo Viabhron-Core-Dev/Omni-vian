@@ -56,11 +56,11 @@ object LogKeeper {
         val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
         if (downloadsDir != null && downloadsDir.exists() || downloadsDir?.mkdirs() == true) {
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-            val file = File(downloadsDir, "OmniRoute_Log_\$timestamp.txt")
+            val file = File(downloadsDir, "OmniRoot_Log_\$timestamp.txt")
             
             try {
                 file.printWriter().use { out ->
-                    out.println("--- OmniRoute Log Export ---")
+                    out.println("--- OmniRoot Log Export ---")
                     _logs.value.forEach { entry ->
                         val timeString = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(entry.timestamp))
                         out.println("[\$timeString] [\${entry.type}] \${entry.component}")
