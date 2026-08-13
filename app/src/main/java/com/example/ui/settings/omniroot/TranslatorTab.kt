@@ -63,7 +63,7 @@ fun TranslatorTab() {
                     } catch (e: Exception) { emptyList() }
                     
                     list.forEachIndexed { index, modelStr ->
-                        Text("\${index + 1}. \$modelStr", style = MaterialTheme.typography.bodySmall)
+                        Text("${index + 1}. $modelStr", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -190,7 +190,7 @@ fun TranslatorPlayground() {
                         outputJson = "Error: Could not parse request."
                     }
                 } catch (e: Exception) {
-                    outputJson = "Error: \${e.message}"
+                    outputJson = "Error: ${e.message}"
                 }
             },
             modifier = Modifier.fillMaxWidth()

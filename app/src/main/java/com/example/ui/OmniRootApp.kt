@@ -241,6 +241,7 @@ fun OmniRootApp() {
                             "tools" -> com.example.ui.settings.ToolsSettingsContent()
                             "mcp" -> com.example.ui.settings.MCPSettingsContent()
                             "plugins" -> com.example.ui.settings.PluginsSettingsContent()
+                            "memory_modules" -> com.example.ui.settings.MemoryModulesSettingsContent()
                             "github", "firebase", "gdrive" -> com.example.ui.settings.IntegrationsSettingsContent()
                             "permissions" -> com.example.ui.settings.PermissionsSettingsContent()
                             "font" -> com.example.ui.settings.FontSettingsContent()

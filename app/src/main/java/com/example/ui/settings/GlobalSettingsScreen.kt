@@ -45,6 +45,7 @@ fun GlobalSettingsScreen(
                 SettingsItem("Tools", "Manage tool permissions", Icons.Default.Build) { onNavigateTo("settings/tools") }
                 SettingsItem("MCP", "Manage Context Providers", Icons.Default.AccountTree) { onNavigateTo("settings/mcp") }
                 SettingsItem("Plugins", "User-made plugins", Icons.Default.Extension) { onNavigateTo("settings/plugins") }
+                SettingsItem("Memory Modules", "Manage agent memory types and architectures", Icons.Default.Memory) { onNavigateTo("settings/memory_modules") }
                 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 SettingsCategory("Integrations")

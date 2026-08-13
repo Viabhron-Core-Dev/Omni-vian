@@ -33,7 +33,7 @@ class OmniRootProxyServer(port: Int, private val context: Context) : NanoHTTPD("
         .build()
     
     init {
-        Log.d("OmniRootProxyServer", "Initializing OmniRoot Proxy on 127.0.0.1:\$port")
+        Log.d("OmniRootProxyServer", "Initializing OmniRoot Proxy on 127.0.0.1:$port")
     }
 
     override fun serve(session: IHTTPSession): Response {
@@ -103,7 +103,7 @@ class OmniRootProxyServer(port: Int, private val context: Context) : NanoHTTPD("
                     val key = activeKeys.firstOrNull { it.isActive }
                     
                     if (key == null && providerId != "local_gguf") {
-                        lastErrorResponse = "No active API key found for \$providerId"
+                        lastErrorResponse = "No active API key found for $providerId"
                         continue // Try next in fallback chain
                     }
 
@@ -116,7 +116,7 @@ class OmniRootProxyServer(port: Int, private val context: Context) : NanoHTTPD("
                     val inputTokens = CompressionEngine.estimateTokens(combinedInputText)
 
                     val translatedPayload = TranslationEngine.translateRequest(updatedRequest, targetFormat)
-                    LogKeeper.log("Proxy", "Routing request to \$providerId (\$actualModelName)", translatedPayload)
+                    LogKeeper.log("Proxy", "Routing request to $providerId ($actualModelName)", translatedPayload)
 
                     val reqBuilder = Request.Builder()
                     when (targetFormat) {
@@ -145,8 +145,8 @@ class OmniRootProxyServer(port: Int, private val context: Context) : NanoHTTPD("
                         val responseBody = response.body?.string() ?: ""
 
                         if (!response.isSuccessful) {
-                            LogKeeper.log("Proxy Error", "API Error from \$providerId", "Code: \${response.code}\nBody: \$responseBody")
-                            lastErrorResponse = "API Error \${response.code}: \$responseBody"
+                            LogKeeper.log("Proxy Error", "API Error from $providerId", "Code: ${response.code}\nBody: $responseBody")
+                            lastErrorResponse = "API Error ${response.code}: $responseBody"
                             lastCode = response.code
                             
                             // If 429 or 5xx, we continue to the next provider in the chain. 
@@ -158,7 +158,7 @@ class OmniRootProxyServer(port: Int, private val context: Context) : NanoHTTPD("
                             }
                         }
 
-                        LogKeeper.log("Proxy", "Received response from \$providerId", "Code: \${response.code}\nBody length: \${responseBody.length}")
+                        LogKeeper.log("Proxy", "Received response from $providerId", "Code: ${response.code}\nBody length: ${responseBody.length}")
 
                         val standardResponse = TranslationEngine.translateResponse(responseBody, targetFormat)
                         
@@ -183,8 +183,8 @@ class OmniRootProxyServer(port: Int, private val context: Context) : NanoHTTPD("
                         return res
 
                     } catch (e: Exception) {
-                        LogKeeper.log("Proxy Error", "Exception in proxy for \$providerId", e.message ?: "Unknown", e.stackTraceToString())
-                        lastErrorResponse = "Proxy Exception: \${e.message}"
+                        LogKeeper.log("Proxy Error", "Exception in proxy for $providerId", e.message ?: "Unknown", e.stackTraceToString())
+                        lastErrorResponse = "Proxy Exception: ${e.message}"
                         continue // Try next
                     }
                 }
@@ -199,7 +199,7 @@ class OmniRootProxyServer(port: Int, private val context: Context) : NanoHTTPD("
             } catch (e: Exception) {
                 Log.e("OmniRootProxyServer", "Error processing request", e)
                 LogKeeper.log("Proxy Error", "Exception in proxy", e.message ?: "Unknown error", e.stackTraceToString())
-                val errorResponse = com.example.ui.chat.OmniResponse(choices = listOf(com.example.ui.chat.OmniChoice(message = com.example.ui.chat.OmniMessage(role = "assistant", content = "Proxy Exception: \${e.message}"))))
+                val errorResponse = com.example.ui.chat.OmniResponse(choices = listOf(com.example.ui.chat.OmniChoice(message = com.example.ui.chat.OmniMessage(role = "assistant", content = "Proxy Exception: ${e.message}"))))
                 val errorJson = Moshi.Builder().build().adapter(com.example.ui.chat.OmniResponse::class.java).toJson(errorResponse)
                 val res = newFixedLengthResponse(Response.Status.OK, "application/json", errorJson)
                 res.addHeader("Access-Control-Allow-Origin", "*")

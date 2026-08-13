@@ -228,3 +228,12 @@ fun EditorSettingsContent() {
         ListItem(headlineContent = { Text("Auto-Indent") }, trailingContent = { Switch(checked = true, onCheckedChange = {}) })
     }
 }
+
+@Composable
+fun MemoryModulesSettingsContent() {
+    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Memory Modules (Phase 11)", style = MaterialTheme.typography.titleMedium)
+        Text("Manage agent memory architectures (Episodic, Vector/RAG, File-System).")
+        Button(onClick = {}) { Text("Add Memory Module") }
+    }
+}

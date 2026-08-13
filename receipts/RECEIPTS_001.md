@@ -31,3 +31,15 @@
 * Edited `OmniRootProxyServer.kt`, `CompressionEngine.kt`, and `TranslatorTab.kt`. 
 * Unified Phase 9.4, 9.5, 9.6, and 9.7 into a single logic pipeline. The `OmniRootProxyServer` now runs a `try-catch` fallback loop. When a user requests a Combo Route, it evaluates the fallback chain array from the Room database, maps the format for the provider via `TranslationEngine`, handles rate limits (HTTP 429 and 500 errors) by shifting to the next provider, and logs tokens via `CompressionEngine.estimateTokens()` to `MetricsDao` on success. Created the `TranslatorTab` UI for building Fallback Chains and testing payload format translations safely before making network calls.
 * Verified via local compilation build (`compile_applet`).
+
+* 2026-08-13
+* Fix string interpolation bugs in OmniRoot Proxy and Translator Tab.
+* Edited `OmniRootProxyServer.kt` and `TranslatorTab.kt` using a Python script to replace escaped dollar signs (`\$`) with literal dollar signs (`$`).
+* This ensures that Kotlin correctly interpolates variables (like `$providerId` and `${response.code}`) instead of printing the variable names literally when reporting errors or logging requests.
+* Verified via local compilation build (`compile_applet`).
+
+* 2026-08-13
+* Add "Memory Modules" placeholder in Settings UI.
+* Edited `GlobalSettingsScreen.kt` to add Memory Modules to `coreSetupItems`, `OmniRootApp.kt` to handle `"memory_modules"` route, and `SettingsPlaceholders.kt` to define `MemoryModulesSettingsContent`.
+* This sets up the UI placeholder for Phase 11 modular memory architectures.
+* Verified via local compilation build (`compile_applet`).
