@@ -69,3 +69,20 @@
 * Configured `CMakeLists.txt` to dynamically fetch and build `ggerganov/llama.cpp` from GitHub when the `USE_REAL_LLAMA` option is passed by CI.
 * Patched `OmniRootProxyServer.kt` to natively intercept `local_gguf` inference requests, pipe them directly into C++, and return the generated text natively as a simulated API payload, completely bypassing network usage.
 * Verified via local compilation build (`compile_applet`).
+
+* 2026-08-13
+* Refactored OmniRoot Settings UI based on user feedback.
+* Enabled real C++ compilation (`USE_REAL_LLAMA=ON` in `CMakeLists.txt`) for all subsequent GitHub Actions builds, replacing the mocked local LLM text engine with the true `ggerganov/llama.cpp` integration.
+* Removed the redundant "Import .gguf" and "Refresh" buttons from the "Available Models" tab.
+* Implemented Material 3 `PullToRefreshBox` around the `ModelsTab` list.
+* Hooked the `.gguf` file import launcher to the `local_gguf` provider entry inside the `DirectoryTab` list.
+* Shifted the `local_gguf` provider entry to the very top of the Directory list for improved UX.
+* Verified via `compile_applet`.
+
+* 2026-08-13
+* Dropped discussion lock to implement missing Phase 9/9.5 logic based on codebase audit.
+* Updated `OmniRootClient.kt` data models to support standard OpenAI tool and function-calling schemas (`OmniTool`, `OmniToolCall`).
+* Completely refactored `TranslationEngine.kt` to dynamically morph tool definitions and tool calls between OpenAI, Anthropic, and Gemini REST schemas.
+* Created `NativeToolExecutor.kt` to handle localized `read_file`, `write_file`, and `list_files` capabilities.
+* Updated `OmniRootProxyServer.kt` to intercept LLM tool requests for file I/O, execute them directly against the Android filesystem, and return the execution result to the chat stream.
+* Verified via `compile_applet`.

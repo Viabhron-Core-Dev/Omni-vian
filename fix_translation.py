@@ -1,4 +1,10 @@
-package com.example.engine.omniroot.pipeline
+import re
+path = 'app/src/main/java/com/example/engine/omniroot/pipeline/TranslationEngine.kt'
+with open(path, 'r') as f:
+    content = f.read()
+
+# I will just write a python script to completely replace TranslationEngine.kt
+new_content = """package com.example.engine.omniroot.pipeline
 
 import com.example.ui.chat.OmniMessage
 import com.example.ui.chat.OmniRequest
@@ -74,7 +80,7 @@ object TranslationEngine {
                 val messagesArray = JSONArray()
                 request.messages.forEach { msg ->
                     if (msg.role == "system") {
-                        systemPrompt += (msg.content ?: "") + "\n"
+                        systemPrompt += (msg.content ?: "") + "\\n"
                     } else {
                         val msgObj = JSONObject()
                         val role = if (msg.role == "user") "user" else "assistant"
@@ -140,7 +146,7 @@ object TranslationEngine {
                 
                 request.messages.forEach { msg ->
                     if (msg.role == "system") {
-                        systemInstruction += (msg.content ?: "") + "\n"
+                        systemInstruction += (msg.content ?: "") + "\\n"
                     } else if (msg.role == "tool") {
                         val contentObj = JSONObject()
                         contentObj.put("role", "user")
@@ -314,3 +320,7 @@ object TranslationEngine {
         }
     }
 }
+"""
+
+with open(path, 'w') as f:
+    f.write(new_content)

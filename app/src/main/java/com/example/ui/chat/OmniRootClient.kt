@@ -19,13 +19,43 @@ import com.example.utils.LogKeeper
 @JsonClass(generateAdapter = true)
 data class OmniMessage(
     val role: String,
-    val content: String
+    val content: String? = null,
+    val tool_calls: List<OmniToolCall>? = null,
+    val tool_call_id: String? = null,
+    val name: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class OmniToolCall(
+    val id: String,
+    val type: String = "function",
+    val function: OmniFunctionCall
+)
+
+@JsonClass(generateAdapter = true)
+data class OmniFunctionCall(
+    val name: String,
+    val arguments: String
+)
+
+@JsonClass(generateAdapter = true)
+data class OmniTool(
+    val type: String = "function",
+    val function: OmniFunctionDef
+)
+
+@JsonClass(generateAdapter = true)
+data class OmniFunctionDef(
+    val name: String,
+    val description: String? = null,
+    val parameters: Map<String, Any>? = null
 )
 
 @JsonClass(generateAdapter = true)
 data class OmniRequest(
     val model: String = "omni-default",
-    val messages: List<OmniMessage>
+    val messages: List<OmniMessage>,
+    val tools: List<OmniTool>? = null
 )
 
 @JsonClass(generateAdapter = true)

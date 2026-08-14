@@ -1,9 +1,9 @@
 package com.example.ui.settings.omniroot
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.Modifier
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
@@ -19,6 +19,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
+
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+
 import android.provider.OpenableColumns
 import android.net.Uri
 import android.database.Cursor
@@ -30,6 +34,24 @@ fun AiManagerPanelScreen(
     onAddKeyClick: (String) -> Unit,
     viewModel: AiManagerViewModel = viewModel()
 ) {
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        uri?.let {
+            context.contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            var fileName = "local_model.gguf"
+            val cursor: Cursor? = context.contentResolver.query(it, null, null, null, null)
+            cursor?.use { c ->
+                if (c.moveToFirst()) {
+                    val displayNameIndex = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (displayNameIndex != -1) fileName = c.getString(displayNameIndex)
+                }
+            }
+            viewModel.addLocalModel(fileName, it.toString())
+        }
+    }
+    
+    val onImportClick: () -> Unit = { launcher.launch(arrayOf("*/*")) }
+
     var selectedTabIndex by remember { mutableStateOf(0) }
     val tabs = listOf("Directory", "Active Keys", "Available Models", "Metrics", "Model Rater", "Translator")
 
@@ -61,7 +83,7 @@ fun AiManagerPanelScreen(
 
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 when (selectedTabIndex) {
-                    0 -> DirectoryTab(viewModel, onAddKeyClick)
+                    0 -> DirectoryTab(viewModel, onAddKeyClick, onImportClick)
                     1 -> ActiveKeysTab(viewModel)
                     2 -> ModelsTab(viewModel)
                     3 -> MetricsTab(viewModel)
@@ -81,19 +103,22 @@ fun CenterTextTab(text: String) {
 }
 
 @Composable
-fun DirectoryTab(viewModel: AiManagerViewModel, onAddKeyClick: (String) -> Unit) {
+fun DirectoryTab(viewModel: AiManagerViewModel, onAddKeyClick: (String) -> Unit, onImportClick: () -> Unit) {
     val providers by viewModel.providers.collectAsState()
+    val sortedProviders = providers.sortedByDescending { it.id == "local_gguf" }
     
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
-        items(providers) { provider ->
+        items(sortedProviders) { provider ->
             Card(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                 ListItem(
                     headlineContent = { Text(provider.name) },
                     supportingContent = { Text(provider.description) },
                     leadingContent = { Icon(Icons.Default.Business, contentDescription = null) },
                     trailingContent = {
-                        IconButton(onClick = { onAddKeyClick(provider.id) }) {
-                            Icon(Icons.Default.Add, contentDescription = "Add Key")
+                        IconButton(onClick = { 
+                            if (provider.id == "local_gguf") onImportClick() else onAddKeyClick(provider.id) 
+                        }) {
+                            Icon(Icons.Default.Add, contentDescription = if (provider.id == "local_gguf") "Import GGUF" else "Add Key")
                         }
                     }
                 )
@@ -155,6 +180,7 @@ fun MetricsTab(viewModel: AiManagerViewModel) {
 
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun ModelsTab(viewModel: AiManagerViewModel) {
     val modelEntities by viewModel.availableModelEntities.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
@@ -190,28 +216,6 @@ fun ModelsTab(viewModel: AiManagerViewModel) {
     }
 
 
-    val context = LocalContext.current
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        uri?.let {
-            context.contentResolver.takePersistableUriPermission(
-                it,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
-            
-            var fileName = "local_model.gguf"
-            val cursor: Cursor? = context.contentResolver.query(it, null, null, null, null)
-            cursor?.use { c ->
-                if (c.moveToFirst()) {
-                    val displayNameIndex = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    if (displayNameIndex != -1) {
-                        fileName = c.getString(displayNameIndex)
-                    }
-                }
-            }
-            viewModel.addLocalModel(fileName, it.toString())
-        }
-    }
-
     Column(modifier = Modifier.fillMaxSize()) {
 
         Row(
@@ -220,14 +224,6 @@ fun ModelsTab(viewModel: AiManagerViewModel) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("Available Models", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { launcher.launch(arrayOf("*/*")) }) {
-                    Text("Import .gguf")
-                }
-                Button(onClick = { viewModel.refreshModels() }) {
-                    Text("Refresh")
-                }
-            }
         }
         
         Row(
@@ -266,8 +262,14 @@ fun ModelsTab(viewModel: AiManagerViewModel) {
             }
         }
 
+        val isRefreshing by viewModel.isRefreshing.collectAsState(initial = false)
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.refreshModels() },
+            modifier = Modifier.fillMaxWidth().weight(1f)
+        ) {
         LazyColumn(
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -309,7 +311,8 @@ fun ModelsTab(viewModel: AiManagerViewModel) {
                     }
                     
                     item {
-                        AnimatedVisibility(visible = expandedFolders.contains(provider) || searchQuery.isNotBlank()) {
+                        Column {
+                            AnimatedVisibility(visible = expandedFolders.contains(provider) || searchQuery.isNotBlank()) {
                             Column(modifier = Modifier.fillMaxWidth().padding(start = 24.dp, top = 4.dp, bottom = 8.dp)) {
                                 modelList.forEach { entity ->
                                     val icon = when (entity.outputType) {
@@ -338,9 +341,11 @@ fun ModelsTab(viewModel: AiManagerViewModel) {
                                 }
                             }
                         }
+                        }
                     }
                 }
             }
+        }
         }
     }
 }

@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -23,6 +24,9 @@ data class OpenAiModelsResponse(val data: List<OpenAiModel>?)
 data class OpenAiModel(val id: String)
 
 class AiManagerViewModel(application: Application) : AndroidViewModel(application) {
+    private val _isRefreshing = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val isRefreshing: kotlinx.coroutines.flow.StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     private val db = AppDatabase.getDatabase(application)
     private val apiProviderDao = db.apiProviderDao()
     private val apiKeyDao = db.apiKeyDao()
@@ -84,6 +88,7 @@ class AiManagerViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun refreshModels() {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            _isRefreshing.value = true
             try {
                 val currentKeys = apiKeyDao.getAllKeys().first()
                 val currentProviders = apiProviderDao.getAllProviders().first().associateBy { it.id }
@@ -152,6 +157,8 @@ class AiManagerViewModel(application: Application) : AndroidViewModel(applicatio
                 }
             } catch (e: Exception) {
                 Log.e("AiManager", "Error in refreshModels", e)
+            } finally {
+                _isRefreshing.value = false
             }
         }
     }
