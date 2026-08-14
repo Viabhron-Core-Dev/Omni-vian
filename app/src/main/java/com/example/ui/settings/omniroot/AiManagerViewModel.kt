@@ -1,5 +1,7 @@
 package com.example.ui.settings.omniroot
 
+import android.content.Context
+import kotlinx.coroutines.flow.MutableStateFlow
 import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
@@ -165,22 +167,63 @@ class AiManagerViewModel(application: Application) : AndroidViewModel(applicatio
 
 
 
-    fun addLocalModel(fileName: String, uriString: String) {
+    val isImporting = MutableStateFlow(false)
+    val importProgress = MutableStateFlow(0f)
+
+    fun addLocalModel(context: Context, fileName: String, uri: android.net.Uri) {
         viewModelScope.launch {
-            val (iType, oType) = inferModelTypes(fileName)
-            aiModelDao.insertModels(
-                listOf(
-                    com.example.engine.db.AiModelEntity(
-                        providerId = "local_gguf",
-                        modelId = fileName,
+            isImporting.value = true
+            importProgress.value = 0f
+            try {
+                val modelsDir = java.io.File(context.filesDir, "models")
+                if (!modelsDir.exists()) modelsDir.mkdirs()
+                val targetFile = java.io.File(modelsDir, fileName)
+                
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    targetFile.outputStream().use { output ->
+                        val buffer = ByteArray(16 * 1024)
+                        var bytesRead: Int
                         
-                        description = uriString,
-                        inputType = iType,
-                        outputType = oType
+                        val cursor = context.contentResolver.query(uri, null, null, null, null)
+                        var size = -1L
+                        cursor?.use { c ->
+                            if (c.moveToFirst()) {
+                                val sizeIndex = c.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                                if (sizeIndex != -1) size = c.getLong(sizeIndex)
+                            }
+                        }
+                        
+                        var totalRead = 0L
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
+                            totalRead += bytesRead
+                            if (size > 0) {
+                                importProgress.value = (totalRead.toFloat() / size.toFloat()).coerceIn(0f, 1f)
+                            } else {
+                                importProgress.value = (importProgress.value + 0.01f) % 1f
+                            }
+                        }
+                    }
+                }
+
+                val (iType, oType) = inferModelTypes(fileName)
+                aiModelDao.insertModels(
+                    listOf(
+                        com.example.engine.db.AiModelEntity(
+                            providerId = "local_gguf",
+                            modelId = fileName,
+                            description = targetFile.absolutePath,
+                            inputType = iType,
+                            outputType = oType
+                        )
                     )
                 )
-            )
-            refreshModels()
+                refreshModels()
+            } catch (e: Exception) {
+                Log.e("AiManagerViewModel", "Error importing model", e)
+            } finally {
+                isImporting.value = false
+            }
         }
     }
 

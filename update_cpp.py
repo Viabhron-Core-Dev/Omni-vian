@@ -1,4 +1,6 @@
-#include <jni.h>
+import os
+
+content = """#include <jni.h>
 #include <string>
 #include <android/log.h>
 #include <unistd.h>
@@ -40,7 +42,7 @@ Java_com_example_engine_omniroot_local_LlamaEngine_loadModel(JNIEnv* env, jobjec
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_example_engine_omniroot_local_LlamaEngine_predictStreamNative(JNIEnv* env, jobject thiz, jstring prompt) {
+Java_com_example_engine_omniroot_local_LlamaEngine_predictStream(JNIEnv* env, jobject thiz, jstring prompt) {
     const char *nativePrompt = env->GetStringUTFChars(prompt, nullptr);
     
     jclass clazz = env->GetObjectClass(thiz);
@@ -93,7 +95,7 @@ Java_com_example_engine_omniroot_local_LlamaEngine_loadModel(JNIEnv* env, jobjec
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_example_engine_omniroot_local_LlamaEngine_predictStreamNative(JNIEnv* env, jobject thiz, jstring prompt) {
+Java_com_example_engine_omniroot_local_LlamaEngine_predictStream(JNIEnv* env, jobject thiz, jstring prompt) {
     const char *nativePrompt = env->GetStringUTFChars(prompt, nullptr);
     LOGI("[MOCK] Simulating streaming inference for prompt: %s", nativePrompt);
     
@@ -132,3 +134,8 @@ Java_com_example_engine_omniroot_local_LlamaEngine_unloadModel(JNIEnv* env, jobj
 }
 
 #endif
+"""
+
+with open('app/src/main/cpp/llama_bridge.cpp', 'w') as f:
+    f.write(content)
+print("Updated llama_bridge.cpp")

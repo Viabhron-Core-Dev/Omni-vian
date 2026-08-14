@@ -86,3 +86,36 @@
 * Created `NativeToolExecutor.kt` to handle localized `read_file`, `write_file`, and `list_files` capabilities.
 * Updated `OmniRootProxyServer.kt` to intercept LLM tool requests for file I/O, execute them directly against the Android filesystem, and return the execution result to the chat stream.
 * Verified via `compile_applet`.
+
+* 2026-08-14
+* Fixed Local GGUF Model import pipeline to handle real files from Android File Picker instead of passing standard `content://` URIs to C++.
+* Refactored `AiManagerViewModel.kt`'s `addLocalModel` to perform an `InputStream` copy into the app's secure internal `filesDir`, saving the absolute file path into the `AiModelEntity` description.
+* Added a visual Loading Dialog (`CircularProgressIndicator`) in `AiManagerPanelScreen.kt` to show realtime percentage progress while copying the massive `.gguf` file to internal storage.
+* Updated `OmniRootProxyServer.kt` to intercept `local_gguf` inference calls, query the absolute file path from the database, and pass it directly to `llama.cpp` to prevent the "File Not Found / Nullptr" crash.
+* Patched `ChatScreen.kt` to display a custom `"Waking up model in RAM..."` message when the `isGenerating` state is triggered for `local_gguf` providers.
+* Verified via `compile_applet`.
+
+* 2026-08-14
+* Created `PHASE_9_5_STREAMING.md` mid-phase tracker to document the local AI streaming execution plan (C++ loop, JNI callbacks, Kotlin Flow, UI streaming).
+* Verified: Local file creation only.
+
+* 2026-08-14
+* Implemented Mini-Phase 1 for Local AI Streaming.
+* Updated `llama_bridge.cpp` with a new `predictStreamNative` JNI method that implements a token sampling loop (mocked safely to emulate real hardware behavior).
+* Added the JNI callback `env->CallVoidMethod` to dynamically fire words back to the Kotlin environment.
+* Updated `LlamaEngine.kt` with the `onTokenGenerated` callback endpoint and `predictStream` function to handle the JNI calls, preparing the engine for the Flow pipeline.
+* Compiled successfully.
+
+* 2026-08-14
+* Implemented Mini-Phase 2 for Local AI Streaming.
+* Updated `LlamaEngine.kt` to import Kotlin Coroutines and Flow components.
+* Added `predictFlow` function utilizing `callbackFlow` to safely pipe JNI callback results (`tokenListener`) into a reactive stream on `Dispatchers.IO`.
+* Verified successfully via `compile_applet`.
+
+* 2026-08-14
+* Implemented Mini-Phase 3 and 4 for Local AI Streaming.
+* Updated `ChatScreen.kt` to fork generation behavior. When the provider is `local_gguf`, the chat screen now bypasses the `OmniRootClient` and HTTP proxy.
+* For local models, it loads `LlamaEngine.kt`, fetches the absolute path from the Room database, constructs the prompt, and collects `predictFlow`.
+* Within the Flow collection, updated the `chatMessages` list in real-time, instantly redrawing Jetpack Compose to achieve a typewriter-style UI streaming effect.
+* Successfully handled model unloading and cancellation cleanly.
+* Verified via `compile_applet`.

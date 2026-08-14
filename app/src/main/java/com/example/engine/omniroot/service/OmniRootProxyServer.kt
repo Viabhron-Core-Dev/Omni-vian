@@ -119,9 +119,13 @@ class OmniRootProxyServer(port: Int, private val context: Context) : NanoHTTPD("
                         var combinedInputText = ""
                         updatedRequest.messages.forEach { combinedInputText += it.content + "\n" }
                         
-                        // We use the model name as the URI since we stored it in the DB (or could fetch it)
+                        // Retrieve the absolute path stored during import
+                        val models = runBlocking { db.aiModelDao().getAllModels().first() }
+                        val modelEntity = models.firstOrNull { it.providerId == "local_gguf" && it.modelId == actualModelName }
+                        val absolutePath = modelEntity?.description ?: actualModelName
+                        
                         val llama = com.example.engine.omniroot.local.LlamaEngine(context)
-                        val loaded = llama.loadModelSafely(actualModelName)
+                        val loaded = llama.loadModelSafely(absolutePath)
                         
                         if (loaded) {
                             val prediction = llama.predict(combinedInputText)

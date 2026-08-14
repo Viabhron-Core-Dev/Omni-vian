@@ -3,7 +3,9 @@ package com.example.ui.settings.omniroot
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.*
+import androidx.compose.ui.window.Dialog
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
@@ -46,7 +48,7 @@ fun AiManagerPanelScreen(
                     if (displayNameIndex != -1) fileName = c.getString(displayNameIndex)
                 }
             }
-            viewModel.addLocalModel(fileName, it.toString())
+            viewModel.addLocalModel(context, fileName, it)
         }
     }
     
@@ -54,6 +56,23 @@ fun AiManagerPanelScreen(
 
     var selectedTabIndex by remember { mutableStateOf(0) }
     val tabs = listOf("Directory", "Active Keys", "Available Models", "Metrics", "Model Rater", "Translator")
+
+
+    val isImporting by viewModel.isImporting.collectAsState()
+    val importProgress by viewModel.importProgress.collectAsState()
+
+    if (isImporting) {
+        Dialog(onDismissRequest = { }) {
+            Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(progress = { importProgress }, modifier = Modifier.size(64.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Copying GGUF to secure internal storage...")
+                    Text("${(importProgress * 100).toInt()}%")
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {

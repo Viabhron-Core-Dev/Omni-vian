@@ -4,6 +4,12 @@ import android.app.ActivityManager
 import android.content.Context
 import android.util.Log
 import java.io.File
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
 
 class LlamaEngine(private val context: Context) {
     companion object {
@@ -45,6 +51,39 @@ class LlamaEngine(private val context: Context) {
     }
 
     private external fun loadModel(path: String): Boolean
+private var tokenListener: ((String) -> Unit)? = null
+
+    // Called from C++ via JNI
+    fun onTokenGenerated(token: String) {
+        tokenListener?.invoke(token)
+    }
+
+    fun predictStream(prompt: String, listener: (String) -> Unit) {
+        tokenListener = listener
+        predictStreamNative(prompt)
+        tokenListener = null // Cleanup after finish
+    }
+
+fun predictFlow(prompt: String): Flow<String> = callbackFlow {
+        // 1. Assign the JNI listener to push words into the Flow pipe
+        tokenListener = { token ->
+            trySend(token)
+        }
+
+        // 2. Launch the heavy C++ math in a background thread so the UI doesn't freeze
+        launch(Dispatchers.IO) {
+            predictStreamNative(prompt)
+            // 3. When C++ finishes the loop, close the pipe
+            close()
+        }
+
+        // 4. Cleanup if the user hits "Stop" and cancels the coroutine
+        awaitClose {
+            tokenListener = null
+        }
+    }
+
+    private external fun predictStreamNative(prompt: String)
     external fun predict(prompt: String): String
     external fun unloadModel()
 }
