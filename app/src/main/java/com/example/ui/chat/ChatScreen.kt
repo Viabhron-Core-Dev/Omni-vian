@@ -102,6 +102,7 @@ fun ChatScreen(
     val dao = db.chatMessageDao()
     
     LaunchedEffect(sessionId) {
+        workspaceName.value = com.example.engine.fs.LocalFileManager.getWorkspaceName(sessionId)
         val initialMessages = dao.getMessagesForSession(sessionId).first()
         chatMessages.clear()
         chatMessages.addAll(initialMessages.map { it.toDomainModel() })
@@ -194,6 +195,13 @@ fun ChatScreen(
                         confirmButton = {
                             TextButton(onClick = {
                                 workspaceName.value = newName
+                                com.example.engine.fs.LocalFileManager.setWorkspaceName(sessionId, newName)
+                                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                    val config = db.workspaceConfigDao().getConfig(sessionId)
+                                    if (config != null) {
+                                        db.workspaceConfigDao().saveConfig(config.copy(threadName = newName))
+                                    }
+                                }
                                 showRename = false
                             }) {
                                 Text("Save")

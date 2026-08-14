@@ -31,17 +31,31 @@ import kotlinx.coroutines.launch
 fun OmniRootApp() {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val prefs = remember(context) { context.getSharedPreferences("omniroot_prefs", android.content.Context.MODE_PRIVATE) }
+    
     var currentTab by remember { mutableStateOf(AppTab.CHAT) }
     var showWorkspaceActions by remember { mutableStateOf(false) }
     var showGithubExport by remember { mutableStateOf(false) }
     var showTokenPanel by remember { mutableStateOf(false) }
     var chatSessionId by remember { 
-        mutableStateOf(java.util.UUID.randomUUID().toString().also { newId ->
-            val count = com.example.engine.fs.LocalFileManager.getWorkspaces().size
-            com.example.engine.fs.LocalFileManager.setWorkspaceName(newId, "Chat ${count + 1}")
-        }) 
+        mutableStateOf(
+            run {
+                val savedId = prefs.getString("active_chat_id", null)
+                val existing = com.example.engine.fs.LocalFileManager.getWorkspaces()
+                if (savedId != null && existing.any { it.name == savedId }) {
+                    savedId
+                } else if (existing.isNotEmpty()) {
+                    existing.first().name
+                } else {
+                    val newId = java.util.UUID.randomUUID().toString()
+                    com.example.engine.fs.LocalFileManager.setWorkspaceName(newId, "Chat 1")
+                    prefs.edit().putString("active_chat_id", newId).apply()
+                    newId
+                }
+            }
+        ) 
     }
-    val context = LocalContext.current
     
     val navController = rememberNavController()
     var showNewChatDialog by remember { mutableStateOf(false) }
@@ -59,8 +73,10 @@ fun OmniRootApp() {
                     navController.navigate("settings")
                 },
                 currentChatId = chatSessionId,
-                onChatSelected = { newSessionId -> chatSessionId = newSessionId
-                    val context = navController.context }
+                onChatSelected = { newSessionId -> 
+                    chatSessionId = newSessionId
+                    prefs.edit().putString("active_chat_id", newSessionId).apply()
+                }
             )
         }
     ) {
@@ -84,7 +100,7 @@ fun OmniRootApp() {
                         )
                     }
                     chatSessionId = newSessionId
-                    val context = navController.context
+                    prefs.edit().putString("active_chat_id", newSessionId).apply()
                     showNewChatDialog = false
                     scope.launch { drawerState.close() }
                 }

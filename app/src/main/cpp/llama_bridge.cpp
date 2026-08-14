@@ -105,6 +105,11 @@ Java_com_example_engine_omniroot_local_LlamaEngine_loadModel(JNIEnv* env, jobjec
     
     llama_context_params ctx_params = llama_context_default_params();
     ctx_params.n_ctx = 4096; // Increased context size to prevent overflow
+    int cpu_cores = sysconf(_SC_NPROCESSORS_ONLN);
+    int optimal_threads = std::max(2, std::min(4, cpu_cores > 2 ? cpu_cores - 2 : cpu_cores));
+    ctx_params.n_threads = optimal_threads;
+    ctx_params.n_threads_batch = optimal_threads;
+    LOGI("Configured llama_context with %d threads (CPU cores: %d)", optimal_threads, cpu_cores);
     ctx = llama_new_context_with_model(model, ctx_params);
     
     env->ReleaseStringUTFChars(path, nativePath);
@@ -138,6 +143,16 @@ Java_com_example_engine_omniroot_local_LlamaEngine_predictStreamNative(JNIEnv* e
         env->ReleaseStringUTFChars(prompt, nativePrompt);
         return;
     }
+
+    // Reset KV cache / memory so the new prompt evaluates from position 0 cleanly
+    llama_memory_t mem = llama_get_memory(ctx);
+    if (mem) {
+        llama_memory_clear(mem, true);
+    }
+
+    int cpu_cores = sysconf(_SC_NPROCESSORS_ONLN);
+    int optimal_threads = std::max(2, std::min(4, cpu_cores > 2 ? cpu_cores - 2 : cpu_cores));
+    llama_set_n_threads(ctx, optimal_threads, optimal_threads);
 
     const struct llama_vocab * vocab = llama_model_get_vocab(model);
     

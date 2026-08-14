@@ -20,6 +20,7 @@ import com.example.R
 import com.example.engine.fs.LocalFileManager
 import java.io.File
 import androidx.compose.ui.Alignment
+import kotlinx.coroutines.launch
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -31,6 +32,7 @@ fun GlobalSidebar(
     onChatSelected: (String) -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
     var workspaces by remember { mutableStateOf(emptyList<File>()) }
     
     LaunchedEffect(currentChatId, onClose) { // Trigger reload when sidebar opens or chat changes
@@ -97,6 +99,12 @@ fun GlobalSidebar(
                         onClose()
                     },
                     onDelete = {
+                        val workspaceToDelete = workspace.name
+                        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                            val db = com.example.engine.db.AppDatabase.getDatabase(context)
+                            db.chatMessageDao().clearSession(workspaceToDelete)
+                            db.workspaceConfigDao().deleteConfig(workspaceToDelete)
+                        }
                         LocalFileManager.deleteWorkspace(workspace.name)
                         val remaining = LocalFileManager.getWorkspaces()
                         workspaces = remaining

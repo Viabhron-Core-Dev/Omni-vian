@@ -12,4 +12,7 @@ interface WorkspaceConfigDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveConfig(config: WorkspaceConfigEntity)
+
+    @Query("DELETE FROM workspace_configs WHERE workspaceId = :workspaceId")
+    suspend fun deleteConfig(workspaceId: String)
 }
