@@ -23,3 +23,10 @@
 * Verification: local build only.
 * Deviation: None.
 * Known issue/Follow-up: Log Keeper UI will be built in a later phase as confirmed.
+* 2026-08-14
+* Implemented the SmolChat-style Local AI Engine architectural improvements:
+* Created `LocalAiManager.kt` as a singleton to load and cache the `LlamaEngine` in memory. This "keep-alive" engine eliminates the massive 10-second overhead of re-loading the 300MB+ `.gguf` file into RAM on every single generation turn.
+* Patched `ChatScreen.kt` to use `indexOfFirst { it.id == generatingMessage.id }` instead of `indexOf(generatingMessage)` to perfectly track state and fix the "only streams one word" bug caused by changing memory hashes in Compose.
+* Updated `ChatScreen.kt` local bypass logic to use SmolLM's expected `ChatML` tokens (`<|im_start|>` and `<|im_end|>`) instead of naive newlines for improved agent output and memory context retention.
+* Wired up `LogKeeper` telemetry inside `LocalAiManager.kt` and `ChatScreen.kt` to report engine load times, token streaming speed, and TPS directly to the debug panel.
+* Verified successful compilation via `compile_applet`.

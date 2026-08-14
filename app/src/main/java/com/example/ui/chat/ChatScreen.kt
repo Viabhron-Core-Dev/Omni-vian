@@ -43,6 +43,9 @@ import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.first
+import com.example.engine.omniroot.local.LocalAiManager
+import com.example.utils.LogKeeper
+import kotlinx.coroutines.flow.onCompletion
 import com.example.engine.omniroot.local.LlamaEngine
 import kotlinx.coroutines.flow.first
 import com.example.engine.db.AppDatabase
@@ -365,34 +368,45 @@ fun ChatScreen(
                                                 val modelEntity = models.firstOrNull { it.providerId == "local_gguf" && it.modelId == currentModel }
                                                 val absolutePath = modelEntity?.description ?: currentModel
                                                 
-                                                val llama = LlamaEngine(context)
-                                                val loaded = llama.loadModelSafely(absolutePath)
+                                                val llama = LocalAiManager.getOrLoadEngine(context, absolutePath)
                                                 
-                                                if (loaded) {
+                                                if (llama != null) {
                                                     var combinedPrompt = ""
                                                     chatMessages.filter { it.id != generatingMessage.id }.forEach { msg ->
                                                         val roleStr = if (msg.role == MessageRole.USER) "user" else "assistant"
-                                                        combinedPrompt += "$roleStr\n${msg.text}\n"
+                                                        combinedPrompt += "<|im_start|>$roleStr\n${msg.text}<|im_end|>\n"
                                                     }
+                                                    combinedPrompt += "<|im_start|>assistant\n"
                                                     
                                                     var streamedText = ""
+                                                    val startTime = System.currentTimeMillis()
+                                                    var tokenCount = 0
+                                                    
                                                     llama.predictFlow(combinedPrompt).collect { token ->
                                                         streamedText += token
-                                                        val index = chatMessages.indexOf(generatingMessage)
+                                                        tokenCount++
+                                                        
+                                                        val index = chatMessages.indexOfFirst { it.id == generatingMessage.id }
                                                         if (index != -1) {
                                                             chatMessages[index] = generatingMessage.copy(text = streamedText)
                                                         }
                                                     }
-                                                    llama.unloadModel()
+                                                    
+                                                    val endTime = System.currentTimeMillis()
+                                                    val elapsedSec = (endTime - startTime) / 1000.0
+                                                    val tps = if (elapsedSec > 0) tokenCount / elapsedSec else 0.0
+                                                    LogKeeper.log("Local AI", "Metrics", "Stream finished. Tokens: $tokenCount, Time: ${elapsedSec}s, TPS: $tps")
+                                                    
+                                                    // Note: We DO NOT unloadModel() here anymore. We keep it alive in LocalAiManager!
                                                     
                                                     // Final save
-                                                    val index = chatMessages.indexOf(generatingMessage)
+                                                    val index = chatMessages.indexOfFirst { it.id == generatingMessage.id }
                                                     if (index != -1) {
                                                         val finalMsg = chatMessages[index]
                                                         saveMessage(finalMsg)
                                                     }
                                                 } else {
-                                                    val index = chatMessages.indexOf(generatingMessage)
+                                                    val index = chatMessages.indexOfFirst { it.id == generatingMessage.id }
                                                     if (index != -1) {
                                                         val finalMsg = generatingMessage.copy(text = "Error: Local model failed to load (OOM or File Not Found).")
                                                         chatMessages[index] = finalMsg
@@ -425,9 +439,10 @@ fun ChatScreen(
                                                 }
                                             }
                                         } catch (e: kotlinx.coroutines.CancellationException) {
-                                            val index = chatMessages.indexOf(generatingMessage)
+                                            val index = chatMessages.indexOfFirst { it.id == generatingMessage.id }
                                             if (index != -1) {
-                                                val msg = generatingMessage.copy(text = "Generation stopped.")
+                                                val oldText = chatMessages[index].text
+                                                val msg = chatMessages[index].copy(text = if (oldText.isBlank() || oldText.contains("Waking up")) "Generation stopped." else oldText)
                                                 chatMessages[index] = msg
                                                 saveMessage(msg)
                                             }
