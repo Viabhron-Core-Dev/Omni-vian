@@ -54,3 +54,13 @@
 * Verification: Not tested (blueprint update only).
 * Deviation: None.
 * Known issue/Follow-up: Proceed with executing Phase 3 (Chat UI polishing).
+
+* 2026-08-14
+* Dropped the "Just Discuss" lock and implemented the REAL C++ inference loop in `llama_bridge.cpp`.
+* Removed the simulated string hardcode.
+* Implemented `llama_tokenize` to convert the Kotlin prompt string into an array of neural network tokens using the loaded model's vocabulary.
+* Implemented `llama_batch_init` and `llama_decode` to evaluate the initial prompt in the context window.
+* Implemented the auto-regressive sampling loop using `llama_sampler_init_greedy()`, `llama_sampler_sample()`, and `llama_sampler_accept()` to guess the next token iteratively.
+* Added `llama_token_to_piece` to decode the integer back to a UTF-8 string and stream it instantly via `onTokenGenerated` over the JNI bridge.
+* Implemented EOS (`llama_vocab_is_eog`) detection to elegantly break the loop and stop generating when the AI completes its thought.
+* Compiled successfully via `compile_applet`.

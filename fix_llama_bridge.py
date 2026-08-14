@@ -1,4 +1,9 @@
-#include <jni.h>
+import re
+path = 'app/src/main/cpp/llama_bridge.cpp'
+with open(path, 'r') as f:
+    content = f.read()
+
+new_content = """#include <jni.h>
 #include <string>
 #include <android/log.h>
 #include <unistd.h>
@@ -206,3 +211,6 @@ Java_com_example_engine_omniroot_local_LlamaEngine_unloadModel(JNIEnv* env, jobj
 }
 
 #endif
+"""
+with open(path, 'w') as f:
+    f.write(new_content)
