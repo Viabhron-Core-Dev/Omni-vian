@@ -14,3 +14,9 @@
 * Verification: Not tested (blueprint update only).
 * Deviation: None.
 * Known issue/Follow-up: Need to wait for user to provide remaining missing items to add to the unmarked phases.
+* 2026-08-14
+* Dropped the "Just Discuss" lock to fix the instant-abort bug in the `llama_bridge.cpp` JNI logic.
+* Added missing token buffer resizing during `llama_tokenize` (llama.cpp returns a negative required size if the buffer is too small, which was previously causing it to abort silently).
+* Increased `llama_context_params.n_ctx` to 4096 to prevent `llama_decode` from crashing on context overflow.
+* Bound the C++ error logging to the Kotlin `onTokenGenerated` callback using `sendError("[ERROR...]")` so that any future C++ segmentation or decode failures are immediately printed to the Chat UI rather than silencing the thread.
+* Recompiled C++ layer successfully.

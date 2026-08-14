@@ -5,3 +5,9 @@
 * Verification: Not tested (blueprint update only).
 * Deviation: None.
 * Known issue/Follow-up: Need to begin implementation phase 3 as discussed.
+* 2026-08-14
+* Dropped the "Just Discuss" lock and implemented deep C++ to Kotlin logging via `LogKeeper`.
+* Implemented `JNI_OnLoad` in `llama_bridge.cpp` to cache the `JavaVM` and a global reference to the `LlamaEngine` class.
+* Updated `LlamaEngine.kt` to expose a `@JvmStatic onNativeLog` method that routes direct to `LogKeeper.log`.
+* Rewrote C++ `LOGI` and `LOGE` macros to push formatted logs across the JNI barrier using `CallStaticVoidMethod`.
+* Hooked into `llama_log_set()` to intercept all internal `ggml` and `llama.cpp` neural network logs and route them straight into the Android LogKeeper interface.

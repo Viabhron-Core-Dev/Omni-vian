@@ -64,3 +64,8 @@
 * Added `llama_token_to_piece` to decode the integer back to a UTF-8 string and stream it instantly via `onTokenGenerated` over the JNI bridge.
 * Implemented EOS (`llama_vocab_is_eog`) detection to elegantly break the loop and stop generating when the AI completes its thought.
 * Compiled successfully via `compile_applet`.
+
+* 2026-08-14
+* Dropped the "Just Discuss" lock to update `BLUEPRINT.md`.
+* Appended Phase 11.4 (Surgical Edit Tool) to Phase 11 (The Brain & Memory) in the main project blueprint.
+* Documented the future requirement for a "Search & Replace" block editor (`edit_file` tool using `target_text` and `replacement_text`) to guarantee fast, safe, token-efficient code modifications for the local AI engine.

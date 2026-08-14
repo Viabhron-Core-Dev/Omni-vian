@@ -15,6 +15,11 @@ class LlamaEngine(private val context: Context) {
     companion object {
         private const val TAG = "LlamaEngine"
         
+        @JvmStatic
+        fun onNativeLog(level: String, message: String) {
+            com.example.utils.LogKeeper.log(level, "Local AI (C++)", message)
+        }
+
         init {
             try {
                 System.loadLibrary("llama_bridge")
