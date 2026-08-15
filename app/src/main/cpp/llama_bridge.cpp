@@ -84,17 +84,27 @@ static void native_log_callback(ggml_log_level level, const char * text, void * 
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-
-Java_com_example_engine_omniroot_local_LlamaEngine_loadModel(JNIEnv* env, jobject, jstring path) {
+Java_com_example_engine_omniroot_local_LlamaEngine_loadModel(
+    JNIEnv* env, jobject, jstring path, jint contextSize, jint numThreads, jboolean useMmap, jboolean useMlock
+) {
     const char *nativePath = env->GetStringUTFChars(path, nullptr);
-    LOGI("Loading real GGUF model: %s", nativePath);
-    
+    LOGI("Loading real GGUF model: %s (ctx=%d, threads=%d, mmap=%d, mlock=%d)", 
+         nativePath, contextSize, numThreads, useMmap ? 1 : 0, useMlock ? 1 : 0);
 
     llama_log_set(native_log_callback, nullptr);
     llama_backend_init();
 
-    
     llama_model_params model_params = llama_model_default_params();
+    if (useMmap && useMlock) {
+        model_params.load_mode = LLAMA_LOAD_MODE_MMAP_MLOCK;
+    } else if (useMmap) {
+        model_params.load_mode = LLAMA_LOAD_MODE_MMAP;
+    } else if (useMlock) {
+        model_params.load_mode = LLAMA_LOAD_MODE_MLOCK;
+    } else {
+        model_params.load_mode = LLAMA_LOAD_MODE_NONE;
+    }
+
     model = llama_load_model_from_file(nativePath, model_params);
     
     if (model == nullptr) {
@@ -104,12 +114,16 @@ Java_com_example_engine_omniroot_local_LlamaEngine_loadModel(JNIEnv* env, jobjec
     }
     
     llama_context_params ctx_params = llama_context_default_params();
-    ctx_params.n_ctx = 4096; // Increased context size to prevent overflow
+    ctx_params.n_ctx = (contextSize > 0) ? contextSize : 2048;
+    
     int cpu_cores = sysconf(_SC_NPROCESSORS_ONLN);
-    int optimal_threads = std::max(2, std::min(4, cpu_cores > 2 ? cpu_cores - 2 : cpu_cores));
+    int optimal_threads = (numThreads > 0) ? numThreads : std::max(2, std::min(4, cpu_cores > 2 ? cpu_cores - 2 : cpu_cores));
     ctx_params.n_threads = optimal_threads;
     ctx_params.n_threads_batch = optimal_threads;
-    LOGI("Configured llama_context with %d threads (CPU cores: %d)", optimal_threads, cpu_cores);
+    ctx_params.n_batch = 512;
+    ctx_params.n_ubatch = 256;
+
+    LOGI("Configured llama_context with %d threads, %d ctx (CPU cores: %d)", optimal_threads, ctx_params.n_ctx, cpu_cores);
     ctx = llama_new_context_with_model(model, ctx_params);
     
     env->ReleaseStringUTFChars(path, nativePath);
@@ -117,7 +131,9 @@ Java_com_example_engine_omniroot_local_LlamaEngine_loadModel(JNIEnv* env, jobjec
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_example_engine_omniroot_local_LlamaEngine_predictStreamNative(JNIEnv* env, jobject thiz, jstring prompt) {
+Java_com_example_engine_omniroot_local_LlamaEngine_predictStreamNative(
+    JNIEnv* env, jobject thiz, jstring prompt, jfloat temperature, jfloat minP, jfloat topP, jint maxTokens
+) {
     const char *nativePrompt = env->GetStringUTFChars(prompt, nullptr);
     
     jclass clazz = env->GetObjectClass(thiz);
@@ -150,10 +166,6 @@ Java_com_example_engine_omniroot_local_LlamaEngine_predictStreamNative(JNIEnv* e
         llama_memory_clear(mem, true);
     }
 
-    int cpu_cores = sysconf(_SC_NPROCESSORS_ONLN);
-    int optimal_threads = std::max(2, std::min(4, cpu_cores > 2 ? cpu_cores - 2 : cpu_cores));
-    llama_set_n_threads(ctx, optimal_threads, optimal_threads);
-
     const struct llama_vocab * vocab = llama_model_get_vocab(model);
     
     // Tokenize
@@ -176,16 +188,30 @@ Java_com_example_engine_omniroot_local_LlamaEngine_predictStreamNative(JNIEnv* e
     
     uint32_t ctx_size = llama_n_ctx(ctx);
     if (prompt_tokens.size() > ctx_size - 4) {
-        sendError("\n[ERROR: Prompt exceeds context size of 4096]\n");
+        sendError("\n[ERROR: Prompt exceeds context size]\n");
         env->ReleaseStringUTFChars(prompt, nativePrompt);
         return;
     }
 
-    // Initialize sampler
-    struct llama_sampler * smpl = llama_sampler_init_greedy();
+    // Initialize sampler chain (Min-P, Top-P, Temperature)
+    struct llama_sampler_chain_params sparams = llama_sampler_chain_default_params();
+    struct llama_sampler * smpl = llama_sampler_chain_init(sparams);
+    
+    if (minP > 0.0f) {
+        llama_sampler_chain_add(smpl, llama_sampler_init_min_p(minP, 1));
+    }
+    if (topP > 0.0f && topP < 1.0f) {
+        llama_sampler_chain_add(smpl, llama_sampler_init_top_p(topP, 1));
+    }
+    if (temperature > 0.0f) {
+        llama_sampler_chain_add(smpl, llama_sampler_init_temp(temperature));
+        llama_sampler_chain_add(smpl, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+    } else {
+        llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
+    }
 
     // Prepare batch
-    llama_batch batch = llama_batch_init(std::max((uint32_t)1024, (uint32_t)prompt_tokens.size()), 0, 1);
+    llama_batch batch = llama_batch_init(std::max((uint32_t)512, (uint32_t)prompt_tokens.size()), 0, 1);
     
     batch.n_tokens = prompt_tokens.size();
     for (size_t i = 0; i < prompt_tokens.size(); i++) {
@@ -205,7 +231,7 @@ Java_com_example_engine_omniroot_local_LlamaEngine_predictStreamNative(JNIEnv* e
     }
     
     int n_past = prompt_tokens.size();
-    int n_predict = 1024; // Max output tokens
+    int n_predict = (maxTokens > 0) ? maxTokens : 1024;
     
     for (int i = 0; i < n_predict; i++) {
         if (n_past >= ctx_size) {
@@ -267,17 +293,23 @@ Java_com_example_engine_omniroot_local_LlamaEngine_unloadModel(JNIEnv* env, jobj
 #else // MOCK IMPLEMENTATION FOR FAST LOCAL BUILDS
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_example_engine_omniroot_local_LlamaEngine_loadModel(JNIEnv* env, jobject, jstring path) {
+Java_com_example_engine_omniroot_local_LlamaEngine_loadModel(
+    JNIEnv* env, jobject, jstring path, jint contextSize, jint numThreads, jboolean useMmap, jboolean useMlock
+) {
     const char *nativePath = env->GetStringUTFChars(path, nullptr);
-    LOGI("[MOCK] Simulating load for GGUF model: %s", nativePath);
+    LOGI("[MOCK] Simulating load for GGUF model: %s (ctx=%d, threads=%d, mmap=%d, mlock=%d)", 
+         nativePath, contextSize, numThreads, useMmap ? 1 : 0, useMlock ? 1 : 0);
     env->ReleaseStringUTFChars(path, nativePath);
     return JNI_TRUE;
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_example_engine_omniroot_local_LlamaEngine_predictStreamNative(JNIEnv* env, jobject thiz, jstring prompt) {
+Java_com_example_engine_omniroot_local_LlamaEngine_predictStreamNative(
+    JNIEnv* env, jobject thiz, jstring prompt, jfloat temperature, jfloat minP, jfloat topP, jint maxTokens
+) {
     const char *nativePrompt = env->GetStringUTFChars(prompt, nullptr);
-    LOGI("[MOCK] Simulating streaming inference for prompt: %s", nativePrompt);
+    LOGI("[MOCK] Simulating streaming inference (temp=%.2f, minP=%.2f, topP=%.2f, maxTokens=%d) for prompt: %s", 
+         temperature, minP, topP, maxTokens, nativePrompt);
     
     jclass clazz = env->GetObjectClass(thiz);
     jmethodID onTokenMethod = env->GetMethodID(clazz, "onTokenGenerated", "(Ljava/lang/String;)V");

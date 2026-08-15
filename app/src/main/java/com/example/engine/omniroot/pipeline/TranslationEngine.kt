@@ -63,12 +63,18 @@ object TranslationEngine {
                     json.put("tools", toolsArray)
                 }
                 
+                if (request.temperature != null) json.put("temperature", request.temperature)
+                if (request.top_p != null) json.put("top_p", request.top_p)
+                if (request.max_tokens != null) json.put("max_tokens", request.max_tokens)
+
                 json.toString(2)
             }
             ProviderFormat.ANTHROPIC -> {
                 val json = JSONObject()
                 json.put("model", request.model)
-                json.put("max_tokens", 4096)
+                json.put("max_tokens", request.max_tokens ?: 4096)
+                if (request.temperature != null) json.put("temperature", request.temperature)
+                if (request.top_p != null) json.put("top_p", request.top_p)
                 
                 var systemPrompt = ""
                 val messagesArray = JSONArray()
@@ -222,6 +228,14 @@ object TranslationEngine {
                     toolsObj.put("functionDeclarations", funcsArray)
                     toolsArray.put(toolsObj)
                     json.put("tools", toolsArray)
+                }
+
+                if (request.temperature != null || request.top_p != null || request.max_tokens != null) {
+                    val genConfig = JSONObject()
+                    if (request.temperature != null) genConfig.put("temperature", request.temperature)
+                    if (request.top_p != null) genConfig.put("topP", request.top_p)
+                    if (request.max_tokens != null) genConfig.put("maxOutputTokens", request.max_tokens)
+                    json.put("generationConfig", genConfig)
                 }
                 
                 json.put("contents", contentsArray)

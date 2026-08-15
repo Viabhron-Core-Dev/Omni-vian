@@ -55,7 +55,10 @@ data class OmniFunctionDef(
 data class OmniRequest(
     val model: String = "omni-default",
     val messages: List<OmniMessage>,
-    val tools: List<OmniTool>? = null
+    val tools: List<OmniTool>? = null,
+    val temperature: Float? = null,
+    val top_p: Float? = null,
+    val max_tokens: Int? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -90,7 +93,13 @@ object OmniRootClient {
     
     var baseUrl: String = "http://localhost:8080/v1/chat/completions"
 
-    suspend fun generateContent(messages: List<ChatMessage>, model: String = "omni-default"): OmniRootResult = suspendCancellableCoroutine { continuation ->
+    suspend fun generateContent(
+        messages: List<ChatMessage>, 
+        model: String = "omni-default",
+        temperature: Float? = null,
+        topP: Float? = null,
+        maxTokens: Int? = null
+    ): OmniRootResult = suspendCancellableCoroutine { continuation ->
         
         val omniMessages = messages.mapNotNull { msg ->
             when (msg.role) {
@@ -102,7 +111,10 @@ object OmniRootClient {
         
         val requestData = OmniRequest(
             model = model,
-            messages = omniMessages
+            messages = omniMessages,
+            temperature = temperature,
+            top_p = topP,
+            max_tokens = maxTokens
         )
         
         val jsonBody = requestAdapter.toJson(requestData)

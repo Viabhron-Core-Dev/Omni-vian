@@ -23,8 +23,9 @@ import com.example.engine.db.ProviderPrepopulator
     TokenUsageEntity::class,
     ModelRatingEntity::class,
     RequestLogEntity::class,
-    AiModelEntity::class
-], version = 9, exportSchema = false)
+    AiModelEntity::class,
+    ChatSettingsEntity::class
+], version = 11, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun workspaceConfigDao(): WorkspaceConfigDao
@@ -37,6 +38,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun metricsDao(): MetricsDao
     abstract fun aiModelDao(): AiModelDao
     abstract fun modelRatingDao(): ModelRatingDao
+    abstract fun chatSettingsDao(): ChatSettingsDao
 
 
     companion object {
@@ -67,6 +69,18 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `chat_settings` (`workspaceId` TEXT NOT NULL, `temperature` REAL NOT NULL, `minP` REAL NOT NULL, `topP` REAL NOT NULL, `maxTokens` INTEGER NOT NULL, `systemPrompt` TEXT NOT NULL, `contextSize` INTEGER NOT NULL, `numThreads` INTEGER NOT NULL, `useMmap` INTEGER NOT NULL, `useMlock` INTEGER NOT NULL, PRIMARY KEY(`workspaceId`))")
+            }
+        }
+
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE chat_settings ADD COLUMN unfoldOnScreen INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
         fun getDatabase(context: Context): AppDatabase {
@@ -77,7 +91,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "omnivian_database"
                 )
                 .addCallback(DatabaseCallback())
-                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                 .build()
                 INSTANCE = instance
                 instance

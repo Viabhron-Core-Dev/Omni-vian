@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -21,6 +22,8 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.UnfoldMore
+import androidx.compose.material.icons.filled.UnfoldLess
 
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
@@ -57,7 +60,7 @@ import java.io.File
 import java.util.UUID
 
 enum class MessageRole {
-    USER, AI, APP_ACTION
+    USER, AI, APP_ACTION, SYSTEM
 }
 
 data class ChatMessage(
@@ -67,8 +70,9 @@ data class ChatMessage(
     val modelName: String? = null,
     val providerId: String? = null,
     val editedFiles: List<Pair<String, Boolean>> = emptyList(),
-
-    val appActions: List<String> = emptyList()
+    val appActions: List<String> = emptyList(),
+    var isFolded: Boolean = true,
+    var isRenderPaused: Boolean = false
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -93,19 +97,52 @@ fun ChatScreen(
     var showArtifactsList by remember { mutableStateOf(false) }
     var isGenerating by remember { mutableStateOf(false) }
     var currentJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var selectedModel by remember { mutableStateOf("Select Model") }
     
     val chatMessages = remember {
         mutableStateListOf<ChatMessage>()
     }
+    val listState = rememberLazyListState()
 
     val db = AppDatabase.getDatabase(context)
     val dao = db.chatMessageDao()
+    val settingsDao = db.chatSettingsDao()
+    
+    // Mini-Phase 8.2: Viewport Fold/Unfold on Screen state
+    var isUnfoldOnScreenEnabled by remember { mutableStateOf(false) }
+
+    LaunchedEffect(sessionId, showAgentSettings) {
+        val settings = settingsDao.getSettings(sessionId)
+        isUnfoldOnScreenEnabled = settings?.unfoldOnScreen ?: false
+    }
+
+    // Mini-Phase 8.2: Scroll observer for Fold on Screen
+    LaunchedEffect(isUnfoldOnScreenEnabled, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
+        if (isUnfoldOnScreenEnabled && chatMessages.isNotEmpty()) {
+            val visibleIndices = listState.layoutInfo.visibleItemsInfo.map { it.index }
+            visibleIndices.forEach { idx ->
+                if (idx in chatMessages.indices && chatMessages[idx].isFolded) {
+                    chatMessages[idx] = chatMessages[idx].copy(isFolded = false)
+                }
+            }
+        }
+    }
     
     LaunchedEffect(sessionId) {
         workspaceName.value = com.example.engine.fs.LocalFileManager.getWorkspaceName(sessionId)
         val initialMessages = dao.getMessagesForSession(sessionId).first()
         chatMessages.clear()
-        chatMessages.addAll(initialMessages.map { it.toDomainModel() })
+        val domainMessages = initialMessages.map { it.toDomainModel() }
+        if (domainMessages.isNotEmpty()) {
+            // Mini-Phase 8.1: Active Turn Rule - Find the last user message and keep all messages from that point unfolded
+            val lastUserIdx = domainMessages.indexOfLast { it.role == MessageRole.USER }
+            val activeTurnStart = if (lastUserIdx != -1) lastUserIdx else (domainMessages.size - 1)
+            
+            domainMessages.forEachIndexed { index, msg ->
+                msg.isFolded = (index < activeTurnStart)
+                chatMessages.add(msg)
+            }
+        }
     }
 
 
@@ -159,6 +196,17 @@ fun ChatScreen(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false }
                 ) {
+                    DropdownMenuItem(
+                        text = { Text("Unfold All") },
+                        leadingIcon = { Icon(Icons.Default.UnfoldMore, contentDescription = null) },
+                        onClick = { 
+                            showMenu = false
+                            chatMessages.indices.forEach { i ->
+                                chatMessages[i] = chatMessages[i].copy(isFolded = false, isRenderPaused = true)
+                            }
+                            Toast.makeText(context, "All messages unfolded (render paused)", Toast.LENGTH_SHORT).show()
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text("Rename") },
                         onClick = { showMenu = false; showRename = true }
@@ -218,22 +266,35 @@ fun ChatScreen(
         )
         
         LazyColumn(
+            state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             items(chatMessages.size, key = { chatMessages[it].id }) { index ->
                 val message = chatMessages[index]
-                val isLastMessage = index == chatMessages.lastIndex
                 when (message.role) {
-                    MessageRole.USER -> UserMessage(text = message.text, isLastMessage = isLastMessage)
-                    MessageRole.AI -> AiMessage(message = message, isLastMessage = isLastMessage, aiViewModel = aiViewModel)
-                    MessageRole.APP_ACTION -> AppActionMessage(
-                        editedFiles = message.editedFiles,
-                        appActions = message.appActions,
-                        onFileClick = { selectedFile = it },
-                        isLastMessage = isLastMessage
+                    MessageRole.USER -> UserMessage(
+                        message = message,
+                        onToggleFold = {
+                            chatMessages[index] = message.copy(isFolded = !message.isFolded)
+                        }
                     )
+                    MessageRole.AI -> AiMessage(
+                        message = message,
+                        aiViewModel = aiViewModel,
+                        onToggleFold = {
+                            chatMessages[index] = message.copy(isFolded = !message.isFolded)
+                        }
+                    )
+                    MessageRole.APP_ACTION -> AppActionMessage(
+                        message = message,
+                        onFileClick = { selectedFile = it },
+                        onToggleFold = {
+                            chatMessages[index] = message.copy(isFolded = !message.isFolded)
+                        }
+                    )
+                    MessageRole.SYSTEM -> { /* System messages are not rendered in user chat timeline */ }
                 }
             }
         }
@@ -271,7 +332,6 @@ fun ChatScreen(
                 ) {
                     // Agent/Model Selector Pill
                     var showModelPicker by remember { mutableStateOf(false) }
-                    var selectedModel by remember { mutableStateOf("Select Model") }
                     
                     // Update selected model if it's not in the available models list
                     LaunchedEffect(availableModels) {
@@ -347,7 +407,13 @@ fun ChatScreen(
                                     isGenerating = false
                                 } else if (inputText.isNotBlank()) {
                                     val prompt = inputText
-                                    val msg = ChatMessage(text = prompt, role = MessageRole.USER)
+                                    
+                                    // Mini-Phase 8.1: Fold all previous turns before starting new active turn
+                                    chatMessages.indices.forEach { i ->
+                                        chatMessages[i] = chatMessages[i].copy(isFolded = true)
+                                    }
+                                    
+                                    val msg = ChatMessage(text = prompt, role = MessageRole.USER, isFolded = false)
                                     chatMessages.add(msg)
                                     saveMessage(msg)
                                     inputText = ""
@@ -363,23 +429,44 @@ fun ChatScreen(
                                     }
 
                                     val loadingText = if (currentProvider == "local_gguf") "Waking up $currentModel in RAM..." else "Thinking..."
-                                    val generatingMessage = ChatMessage(text = loadingText, role = MessageRole.AI, modelName = currentModel, providerId = currentProvider)
+                                    val generatingMessage = ChatMessage(text = loadingText, role = MessageRole.AI, modelName = currentModel, providerId = currentProvider, isFolded = false)
 
                                     chatMessages.add(generatingMessage)
                                     
                                     isGenerating = true
                                     currentJob = scope.launch {
                                         try {
+                                            val currentSettings = db.chatSettingsDao().getSettings(sessionId)
+                                            val temperature = currentSettings?.temperature ?: 0.7f
+                                            val minP = currentSettings?.minP ?: 0.05f
+                                            val topP = currentSettings?.topP ?: 0.95f
+                                            val maxTokens = currentSettings?.maxTokens ?: 2048
+                                            val systemPrompt = currentSettings?.systemPrompt ?: ""
+                                            val contextSize = currentSettings?.contextSize ?: 2048
+                                            val numThreads = currentSettings?.numThreads ?: 4
+                                            val useMmap = currentSettings?.useMmap ?: true
+                                            val useMlock = currentSettings?.useMlock ?: false
+
                                             if (currentProvider == "local_gguf") {
-                                                // Mini-Phase 3 & 4: Direct Bypass and Streaming UI
+                                                // Mini-Phase 3 & 4: Direct Bypass and Streaming UI with SmolChat hardware engine
                                                 val models = db.aiModelDao().getAllModels().first()
                                                 val modelEntity = models.firstOrNull { it.providerId == "local_gguf" && it.modelId == currentModel }
                                                 val absolutePath = modelEntity?.description ?: currentModel
                                                 
-                                                val llama = LocalAiManager.getOrLoadEngine(context, absolutePath)
+                                                val llama = LocalAiManager.getOrLoadEngine(
+                                                    context, 
+                                                    absolutePath,
+                                                    contextSize = contextSize,
+                                                    numThreads = numThreads,
+                                                    useMmap = useMmap,
+                                                    useMlock = useMlock
+                                                )
                                                 
                                                 if (llama != null) {
                                                     var combinedPrompt = ""
+                                                    if (systemPrompt.isNotBlank()) {
+                                                        combinedPrompt += "<|im_start|>system\n$systemPrompt<|im_end|>\n"
+                                                    }
                                                     chatMessages.filter { it.id != generatingMessage.id }.forEach { msg ->
                                                         val roleStr = if (msg.role == MessageRole.USER) "user" else "assistant"
                                                         combinedPrompt += "<|im_start|>$roleStr\n${msg.text}<|im_end|>\n"
@@ -390,7 +477,13 @@ fun ChatScreen(
                                                     val startTime = System.currentTimeMillis()
                                                     var tokenCount = 0
                                                     
-                                                    llama.predictFlow(combinedPrompt).collect { token ->
+                                                    llama.predictFlow(
+                                                        prompt = combinedPrompt,
+                                                        temperature = temperature,
+                                                        minP = minP,
+                                                        topP = topP,
+                                                        maxTokens = maxTokens
+                                                    ).collect { token ->
                                                         streamedText += token
                                                         tokenCount++
                                                         
@@ -404,8 +497,6 @@ fun ChatScreen(
                                                     val elapsedSec = (endTime - startTime) / 1000.0
                                                     val tps = if (elapsedSec > 0) tokenCount / elapsedSec else 0.0
                                                     LogKeeper.log("Local AI", "Metrics", "Stream finished. Tokens: $tokenCount, Time: ${elapsedSec}s, TPS: $tps")
-                                                    
-                                                    // Note: We DO NOT unloadModel() here anymore. We keep it alive in LocalAiManager!
                                                     
                                                     // Final save
                                                     val index = chatMessages.indexOfFirst { it.id == generatingMessage.id }
@@ -423,10 +514,19 @@ fun ChatScreen(
                                                 }
                                                 
                                             } else {
-                                                // Normal OmniRoot HTTP Proxy flow
+                                                // Normal OmniRoot HTTP Proxy flow with custom parameters
+                                                val messagesToSend = mutableListOf<ChatMessage>()
+                                                if (systemPrompt.isNotBlank()) {
+                                                    messagesToSend.add(ChatMessage(text = systemPrompt, role = MessageRole.SYSTEM))
+                                                }
+                                                messagesToSend.addAll(chatMessages.filter { it.id != generatingMessage.id })
+
                                                 val response = com.example.ui.chat.OmniRootClient.generateContent(
-                                                    chatMessages.filter { it.id != generatingMessage.id },
-                                                    selectedModel
+                                                    messages = messagesToSend,
+                                                    model = selectedModel,
+                                                    temperature = temperature,
+                                                    topP = topP,
+                                                    maxTokens = maxTokens
                                                 )
                                                 val index = chatMessages.indexOf(generatingMessage)
                                                 if (index != -1) {
@@ -434,13 +534,13 @@ fun ChatScreen(
                                                 }
                                                 
                                                 if (response.actions.isNotEmpty() || response.editedFiles.isNotEmpty()) {
-                                                    val msg = ChatMessage(text = "", role = MessageRole.APP_ACTION, appActions = response.actions, editedFiles = response.editedFiles)
+                                                    val msg = ChatMessage(text = "", role = MessageRole.APP_ACTION, appActions = response.actions, editedFiles = response.editedFiles, isFolded = false)
                                                     chatMessages.add(msg)
                                                     saveMessage(msg)
                                                 }
 
                                                 if (!response.text.isNullOrBlank()) {
-                                                    val msg = ChatMessage(text = response.text, role = MessageRole.AI, modelName = currentModel, providerId = currentProvider)
+                                                    val msg = ChatMessage(text = response.text, role = MessageRole.AI, modelName = currentModel, providerId = currentProvider, isFolded = false)
 
                                                     chatMessages.add(msg)
                                                     saveMessage(msg)
@@ -478,7 +578,15 @@ fun ChatScreen(
         
         if (showAgentSettings) {
             AgentSettingsBottomSheet(
-                onDismiss = { showAgentSettings = false }
+                workspaceId = sessionId,
+                currentModel = selectedModel,
+                onDismiss = { 
+                    showAgentSettings = false
+                    scope.launch {
+                        val settings = settingsDao.getSettings(sessionId)
+                        isUnfoldOnScreenEnabled = settings?.unfoldOnScreen ?: false
+                    }
+                }
             )
         }
         
@@ -585,8 +693,11 @@ fun ChatScreen(
 }
 
 @Composable
-fun UserMessage(text: String, isLastMessage: Boolean = true) {
-    var expanded by remember(isLastMessage) { mutableStateOf(isLastMessage) }
+fun UserMessage(
+    message: ChatMessage,
+    onToggleFold: () -> Unit
+) {
+    val expanded = !message.isFolded
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -595,7 +706,7 @@ fun UserMessage(text: String, isLastMessage: Boolean = true) {
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clickable { expanded = !expanded }.padding(4.dp)
+            modifier = Modifier.clickable { onToggleFold() }.padding(4.dp)
         ) {
             Text("You", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -607,29 +718,47 @@ fun UserMessage(text: String, isLastMessage: Boolean = true) {
             ) {
                 SelectionContainer {
                     Text(
-                        text = text,
+                        text = message.text,
                         modifier = Modifier.padding(16.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            }
+        } else {
+            // Mini-Phase 8.1: Folded Summary Badge for User prompt
+            val previewText = if (message.text.length > 50) message.text.take(47) + "..." else message.text
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.clickable { onToggleFold() }
+            ) {
+                Text(
+                    text = previewText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
             }
         }
     }
 }
 
 @Composable
-fun AiMessage(message: ChatMessage, isLastMessage: Boolean = true, aiViewModel: AiManagerViewModel) {
+fun AiMessage(
+    message: ChatMessage,
+    aiViewModel: AiManagerViewModel,
+    onToggleFold: () -> Unit
+) {
     val context = LocalContext.current
-    var expanded by remember(isLastMessage) { mutableStateOf(isLastMessage) }
+    val expanded = !message.isFolded
     var userRating by remember(message.id) { mutableStateOf<Boolean?>(null) }
-    val scope = rememberCoroutineScope()
     
     val displayName = message.modelName ?: "Gemini Pro Latest"
     
     Column(modifier = Modifier.fillMaxWidth().padding(end = 32.dp, start = 8.dp)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clickable { expanded = !expanded }.padding(4.dp)
+            modifier = Modifier.clickable { onToggleFold() }.padding(4.dp)
         ) {
             Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(8.dp))
@@ -688,22 +817,43 @@ fun AiMessage(message: ChatMessage, isLastMessage: Boolean = true, aiViewModel: 
                     }
                 }
             }
+        } else {
+            // Mini-Phase 8.1: Folded Summary Badge for AI Response
+            val charCount = message.text.length
+            val tokenEst = charCount / 4
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                modifier = Modifier.clickable { onToggleFold() }
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = "Response folded (~$tokenEst tokens • $charCount chars)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    )
+                }
+            }
         }
     }
 }
+
 @Composable
 fun AppActionMessage(
-    editedFiles: List<Pair<String, Boolean>> = emptyList(),
-    appActions: List<String> = emptyList(),
+    message: ChatMessage,
     onFileClick: (String) -> Unit = {},
-    isLastMessage: Boolean = true
+    onToggleFold: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxWidth().padding(end = 32.dp, start = 8.dp)) {
         ActionHistoryCard(
-            editedFiles = editedFiles,
-            appActions = appActions,
+            editedFiles = message.editedFiles,
+            appActions = message.appActions,
             onFileClick = onFileClick,
-            isLastMessage = isLastMessage
+            isFolded = message.isFolded,
+            onToggleFold = onToggleFold
         )
     }
 }
@@ -714,9 +864,10 @@ fun ActionHistoryCard(
     editedFiles: List<Pair<String, Boolean>> = emptyList(),
     appActions: List<String> = emptyList(),
     onFileClick: (String) -> Unit = {},
-    isLastMessage: Boolean = true
+    isFolded: Boolean = true,
+    onToggleFold: () -> Unit = {}
 ) {
-    var expanded by remember(isLastMessage) { mutableStateOf(isLastMessage && (appActions.isNotEmpty() || editedFiles.isNotEmpty())) }
+    val expanded = !isFolded
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -727,7 +878,7 @@ fun ActionHistoryCard(
             // Header
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(vertical = 4.dp)
+                modifier = Modifier.fillMaxWidth().clickable { onToggleFold() }.padding(vertical = 4.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.List,
