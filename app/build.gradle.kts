@@ -24,6 +24,7 @@ android {
     externalNativeBuild {
       cmake {
         cppFlags += "-std=c++17"
+        arguments.add("-DUSE_REAL_LLAMA=ON")
         // Target modern architectures to keep build fast
         abiFilters.add("arm64-v8a")
         abiFilters.add("x86_64")

@@ -25,7 +25,7 @@ import com.example.engine.db.ProviderPrepopulator
     RequestLogEntity::class,
     AiModelEntity::class,
     ChatSettingsEntity::class
-], version = 11, exportSchema = false)
+], version = 12, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun workspaceConfigDao(): WorkspaceConfigDao
@@ -81,6 +81,12 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE chat_messages ADD COLUMN isFolded INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
         fun getDatabase(context: Context): AppDatabase {
@@ -91,7 +97,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "omnivian_database"
                 )
                 .addCallback(DatabaseCallback())
-                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
                 .build()
                 INSTANCE = instance
                 instance

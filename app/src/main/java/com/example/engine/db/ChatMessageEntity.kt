@@ -17,5 +17,6 @@ data class ChatMessageEntity(
     val editedFilesJson: String,
 
     val appActionsJson: String,
+    val isFolded: Boolean = true,
     val timestamp: Long
 )

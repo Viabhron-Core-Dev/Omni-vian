@@ -1,5 +1,8 @@
 package com.example.ui.chat
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -111,9 +114,14 @@ fun ChatScreen(
     // Mini-Phase 8.2: Viewport Fold/Unfold on Screen state
     var isUnfoldOnScreenEnabled by remember { mutableStateOf(false) }
 
-    LaunchedEffect(sessionId, showAgentSettings) {
-        val settings = settingsDao.getSettings(sessionId)
-        isUnfoldOnScreenEnabled = settings?.unfoldOnScreen ?: false
+    // Mini-Phase 8.5: Live reactive settings synchronization with LogKeeper
+    LaunchedEffect(sessionId) {
+        settingsDao.getSettingsFlow(sessionId).collect { settings ->
+            if (settings != null) {
+                isUnfoldOnScreenEnabled = settings.unfoldOnScreen
+                LogKeeper.log("ChatSettings", "FlowSync", "Reactive sync for $sessionId: unfoldOnScreen=${settings.unfoldOnScreen}")
+            }
+        }
     }
 
     // Mini-Phase 8.2: Scroll observer for Fold on Screen
@@ -127,6 +135,13 @@ fun ChatScreen(
             }
         }
     }
+
+    // Mini-Phase 8.4: Auto-scroll to latest message when new turns arrive
+    LaunchedEffect(chatMessages.size) {
+        if (chatMessages.isNotEmpty()) {
+            listState.animateScrollToItem(chatMessages.size - 1)
+        }
+    }
     
     LaunchedEffect(sessionId) {
         workspaceName.value = com.example.engine.fs.LocalFileManager.getWorkspaceName(sessionId)
@@ -134,13 +149,22 @@ fun ChatScreen(
         chatMessages.clear()
         val domainMessages = initialMessages.map { it.toDomainModel() }
         if (domainMessages.isNotEmpty()) {
-            // Mini-Phase 8.1: Active Turn Rule - Find the last user message and keep all messages from that point unfolded
-            val lastUserIdx = domainMessages.indexOfLast { it.role == MessageRole.USER }
-            val activeTurnStart = if (lastUserIdx != -1) lastUserIdx else (domainMessages.size - 1)
-            
-            domainMessages.forEachIndexed { index, msg ->
-                msg.isFolded = (index < activeTurnStart)
-                chatMessages.add(msg)
+            // Check if all messages are folded (e.g. first load or all collapsed)
+            val hasExplicitFolds = initialMessages.any { !it.isFolded }
+            if (hasExplicitFolds) {
+                // Restore exact persisted user fold states
+                domainMessages.forEach { msg ->
+                    chatMessages.add(msg)
+                }
+            } else {
+                // Active Turn Rule fallback: Keep latest active turn unfolded
+                val lastUserIdx = domainMessages.indexOfLast { it.role == MessageRole.USER }
+                val activeTurnStart = if (lastUserIdx != -1) lastUserIdx else (domainMessages.size - 1)
+                
+                domainMessages.forEachIndexed { index, msg ->
+                    msg.isFolded = (index < activeTurnStart)
+                    chatMessages.add(msg)
+                }
             }
         }
     }
@@ -149,7 +173,21 @@ fun ChatScreen(
     
     fun saveMessage(msg: ChatMessage) {
         if (msg.text != "Thinking...") {
-            scope.launch { dao.insertMessage(msg.toEntity(sessionId)) }
+            scope.launch { 
+                dao.insertMessage(msg.toEntity(sessionId))
+                LogKeeper.log("ChatScreen", "MessagePersisted", "Saved ${msg.role} message (${msg.id}) in session $sessionId")
+            }
+        }
+    }
+
+    fun toggleMessageFold(index: Int) {
+        if (index in chatMessages.indices) {
+            val updated = chatMessages[index].copy(isFolded = !chatMessages[index].isFolded)
+            chatMessages[index] = updated
+            scope.launch {
+                dao.updateFoldState(updated.id, updated.isFolded)
+                LogKeeper.log("ChatScreen", "FoldToggled", "Toggled fold state for msg ${updated.id} to isFolded=${updated.isFolded}")
+            }
         }
     }
 
@@ -197,14 +235,29 @@ fun ChatScreen(
                     onDismissRequest = { showMenu = false }
                 ) {
                     DropdownMenuItem(
+                        text = { Text("Fold All") },
+                        leadingIcon = { Icon(Icons.Default.UnfoldLess, contentDescription = null) },
+                        onClick = { 
+                            showMenu = false
+                            chatMessages.indices.forEach { i ->
+                                val folded = chatMessages[i].copy(isFolded = true)
+                                chatMessages[i] = folded
+                                scope.launch { dao.updateFoldState(folded.id, true) }
+                            }
+                            Toast.makeText(context, "All messages folded", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                    DropdownMenuItem(
                         text = { Text("Unfold All") },
                         leadingIcon = { Icon(Icons.Default.UnfoldMore, contentDescription = null) },
                         onClick = { 
                             showMenu = false
                             chatMessages.indices.forEach { i ->
-                                chatMessages[i] = chatMessages[i].copy(isFolded = false, isRenderPaused = true)
+                                val unfolded = chatMessages[i].copy(isFolded = false, isRenderPaused = true)
+                                chatMessages[i] = unfolded
+                                scope.launch { dao.updateFoldState(unfolded.id, false) }
                             }
-                            Toast.makeText(context, "All messages unfolded (render paused)", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "All messages unfolded", Toast.LENGTH_SHORT).show()
                         }
                     )
                     DropdownMenuItem(
@@ -276,23 +329,17 @@ fun ChatScreen(
                 when (message.role) {
                     MessageRole.USER -> UserMessage(
                         message = message,
-                        onToggleFold = {
-                            chatMessages[index] = message.copy(isFolded = !message.isFolded)
-                        }
+                        onToggleFold = { toggleMessageFold(index) }
                     )
                     MessageRole.AI -> AiMessage(
                         message = message,
                         aiViewModel = aiViewModel,
-                        onToggleFold = {
-                            chatMessages[index] = message.copy(isFolded = !message.isFolded)
-                        }
+                        onToggleFold = { toggleMessageFold(index) }
                     )
                     MessageRole.APP_ACTION -> AppActionMessage(
                         message = message,
                         onFileClick = { selectedFile = it },
-                        onToggleFold = {
-                            chatMessages[index] = message.copy(isFolded = !message.isFolded)
-                        }
+                        onToggleFold = { toggleMessageFold(index) }
                     )
                     MessageRole.SYSTEM -> { /* System messages are not rendered in user chat timeline */ }
                 }
@@ -408,9 +455,13 @@ fun ChatScreen(
                                 } else if (inputText.isNotBlank()) {
                                     val prompt = inputText
                                     
-                                    // Mini-Phase 8.1: Fold all previous turns before starting new active turn
+                                    // Mini-Phase 8.4: Auto-fold all previous messages and persist for active turn isolation
                                     chatMessages.indices.forEach { i ->
-                                        chatMessages[i] = chatMessages[i].copy(isFolded = true)
+                                        if (!chatMessages[i].isFolded) {
+                                            val folded = chatMessages[i].copy(isFolded = true)
+                                            chatMessages[i] = folded
+                                            scope.launch { dao.updateFoldState(folded.id, true) }
+                                        }
                                     }
                                     
                                     val msg = ChatMessage(text = prompt, role = MessageRole.USER, isFolded = false)
@@ -698,6 +749,12 @@ fun UserMessage(
     onToggleFold: () -> Unit
 ) {
     val expanded = !message.isFolded
+    val arrowRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+        label = "user_arrow_anim"
+    )
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -709,9 +766,20 @@ fun UserMessage(
             modifier = Modifier.clickable { onToggleFold() }.padding(4.dp)
         ) {
             Text("You", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = if (expanded) "Collapse message" else "Expand message",
+                modifier = Modifier.size(16.dp).rotate(arrowRotation),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
-        if (expanded) {
+
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn(animationSpec = tween(180)) + expandVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+            exit = fadeOut(animationSpec = tween(150)) + shrinkVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+        ) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant
@@ -724,8 +792,14 @@ fun UserMessage(
                     )
                 }
             }
-        } else {
-            // Mini-Phase 8.1: Folded Summary Badge for User prompt
+        }
+
+        AnimatedVisibility(
+            visible = !expanded,
+            enter = fadeIn(animationSpec = tween(180)) + expandVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+            exit = fadeOut(animationSpec = tween(150)) + shrinkVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+        ) {
+            // Folded Summary Badge for User prompt
             val previewText = if (message.text.length > 50) message.text.take(47) + "..." else message.text
             Surface(
                 shape = RoundedCornerShape(12.dp),
@@ -754,6 +828,11 @@ fun AiMessage(
     var userRating by remember(message.id) { mutableStateOf<Boolean?>(null) }
     
     val displayName = message.modelName ?: "Gemini Pro Latest"
+    val arrowRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+        label = "ai_arrow_anim"
+    )
     
     Column(modifier = Modifier.fillMaxWidth().padding(end = 32.dp, start = 8.dp)) {
         Row(
@@ -763,62 +842,80 @@ fun AiMessage(
             Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text(displayName, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = if (expanded) "Collapse message" else "Expand message",
+                modifier = Modifier.size(16.dp).rotate(arrowRotation),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         
-        if (expanded) {
-            Spacer(modifier = Modifier.height(8.dp))
-            SelectionContainer {
-                Text(text = message.text, style = MaterialTheme.typography.bodyLarge)
-            }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                // Copy Action
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("AI Response", message.text))
-                        Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
-                    }
-                ) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Copy", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn(animationSpec = tween(180)) + expandVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+            exit = fadeOut(animationSpec = tween(150)) + shrinkVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+        ) {
+            Column {
+                Spacer(modifier = Modifier.height(8.dp))
+                SelectionContainer {
+                    Text(text = message.text, style = MaterialTheme.typography.bodyLarge)
                 }
                 
-                // Ratings
-                if (message.modelName != null && message.providerId != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // Copy Action
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clickable {
-                            if (userRating != true) {
-                                userRating = true
-                                aiViewModel.rateModel(message.providerId, message.modelName, true, message.id)
-                                Toast.makeText(context, "Rated: Upvote", Toast.LENGTH_SHORT).show()
-                            }
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("AI Response", message.text))
+                            Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
                         }
                     ) {
-                        Icon(Icons.Default.ThumbUp, contentDescription = "Upvote", modifier = Modifier.size(16.dp), tint = if (userRating == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Copy", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     }
                     
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable {
-                            if (userRating != false) {
-                                userRating = false
-                                aiViewModel.rateModel(message.providerId, message.modelName, false, message.id)
-                                Toast.makeText(context, "Rated: Downvote", Toast.LENGTH_SHORT).show()
+                    // Ratings
+                    if (message.modelName != null && message.providerId != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable {
+                                if (userRating != true) {
+                                    userRating = true
+                                    aiViewModel.rateModel(message.providerId, message.modelName, true, message.id)
+                                    Toast.makeText(context, "Rated: Upvote", Toast.LENGTH_SHORT).show()
+                                }
                             }
+                        ) {
+                            Icon(Icons.Default.ThumbUp, contentDescription = "Upvote", modifier = Modifier.size(16.dp), tint = if (userRating == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                    ) {
-                        Icon(Icons.Default.ThumbDown, contentDescription = "Downvote", modifier = Modifier.size(16.dp), tint = if (userRating == false) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                        
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable {
+                                if (userRating != false) {
+                                    userRating = false
+                                    aiViewModel.rateModel(message.providerId, message.modelName, false, message.id)
+                                    Toast.makeText(context, "Rated: Downvote", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.ThumbDown, contentDescription = "Downvote", modifier = Modifier.size(16.dp), tint = if (userRating == false) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
-        } else {
-            // Mini-Phase 8.1: Folded Summary Badge for AI Response
+        }
+
+        AnimatedVisibility(
+            visible = !expanded,
+            enter = fadeIn(animationSpec = tween(180)) + expandVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+            exit = fadeOut(animationSpec = tween(150)) + shrinkVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+        ) {
+            // Folded Summary Badge for AI Response
             val charCount = message.text.length
             val tokenEst = charCount / 4
             Surface(
@@ -868,6 +965,12 @@ fun ActionHistoryCard(
     onToggleFold: () -> Unit = {}
 ) {
     val expanded = !isFolded
+    val arrowRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+        label = "action_arrow_anim"
+    )
+
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -893,56 +996,67 @@ fun ActionHistoryCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (expanded) "Collapse actions" else "Expand actions",
+                    modifier = Modifier.size(16.dp).rotate(arrowRotation),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             
-            if (expanded) {
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                if (appActions.isNotEmpty()) {
-                    appActions.forEach { action ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        ) {
-                            Box(modifier = Modifier.size(4.dp).background(MaterialTheme.colorScheme.onSurfaceVariant, RoundedCornerShape(2.dp)))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = action,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-                
-                if (editedFiles.isNotEmpty()) {
-                    // Edit section header
-                    Text("Files edited:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
+            AnimatedVisibility(
+                visible = expanded,
+                enter = fadeIn(animationSpec = tween(180)) + expandVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+                exit = fadeOut(animationSpec = tween(150)) + shrinkVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(16.dp))
                     
-                    editedFiles.forEach { (filePath, success) ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 4.dp)
-                                .clickable { onFileClick(filePath) }
-                                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
-                                .padding(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (success) Icons.Default.CheckCircle else Icons.Default.Cancel,
-                                contentDescription = if (success) "Success" else "Failed",
-                                tint = if (success) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = filePath.substringAfterLast("/"),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                    if (appActions.isNotEmpty()) {
+                        appActions.forEach { action ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            ) {
+                                Box(modifier = Modifier.size(4.dp).background(MaterialTheme.colorScheme.onSurfaceVariant, RoundedCornerShape(2.dp)))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = action,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                    
+                    if (editedFiles.isNotEmpty()) {
+                        // Edit section header
+                        Text("Files edited:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
+                        
+                        editedFiles.forEach { (filePath, success) ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 4.dp)
+                                    .clickable { onFileClick(filePath) }
+                                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
+                                    .padding(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (success) Icons.Default.CheckCircle else Icons.Default.Cancel,
+                                    contentDescription = if (success) "Success" else "Failed",
+                                    tint = if (success) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = filePath.substringAfterLast("/"),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
                     }
                 }

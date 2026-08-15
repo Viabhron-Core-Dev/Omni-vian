@@ -14,6 +14,9 @@ interface ChatMessageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: ChatMessageEntity)
 
+    @Query("UPDATE chat_messages SET isFolded = :isFolded WHERE id = :id")
+    suspend fun updateFoldState(id: String, isFolded: Boolean)
+
     @Query("DELETE FROM chat_messages WHERE sessionId = :sessionId")
     suspend fun clearSession(sessionId: String)
 }

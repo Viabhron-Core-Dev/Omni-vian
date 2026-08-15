@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.engine.db.AppDatabase
 import com.example.engine.db.ChatSettingsEntity
+import com.example.utils.LogKeeper
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -57,26 +58,27 @@ fun AgentSettingsBottomSheet(
             useMmap = existing.useMmap
             useMlock = existing.useMlock
             unfoldOnScreen = existing.unfoldOnScreen
+            LogKeeper.log("ChatSettings", "Loaded", "Loaded thread settings for workspace $workspaceId (temp=$temperature, unfoldOnScreen=$unfoldOnScreen)")
         }
     }
 
     fun persistSettings() {
         scope.launch {
-            dao.saveSettings(
-                ChatSettingsEntity(
-                    workspaceId = workspaceId,
-                    temperature = temperature,
-                    minP = minP,
-                    topP = topP,
-                    maxTokens = maxTokens,
-                    systemPrompt = systemPrompt,
-                    contextSize = contextSize,
-                    numThreads = numThreads,
-                    useMmap = useMmap,
-                    useMlock = useMlock,
-                    unfoldOnScreen = unfoldOnScreen
-                )
+            val entity = ChatSettingsEntity(
+                workspaceId = workspaceId,
+                temperature = temperature,
+                minP = minP,
+                topP = topP,
+                maxTokens = maxTokens,
+                systemPrompt = systemPrompt,
+                contextSize = contextSize,
+                numThreads = numThreads,
+                useMmap = useMmap,
+                useMlock = useMlock,
+                unfoldOnScreen = unfoldOnScreen
             )
+            dao.saveSettings(entity)
+            LogKeeper.log("ChatSettings", "Sync", "Persisted settings for workspace $workspaceId (temp=$temperature, topP=$topP, unfoldOnScreen=$unfoldOnScreen)")
         }
     }
 
@@ -119,6 +121,47 @@ fun AgentSettingsBottomSheet(
                 }) {
                     Icon(Icons.Default.Check, contentDescription = "Done")
                 }
+            }
+
+            // Quick Preset Profiles
+            Text("Inference Presets", style = MaterialTheme.typography.titleSmall)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(top = 8.dp, bottom = 16.dp)
+            ) {
+                FilterChip(
+                    selected = (temperature == 0.2f && topP == 0.85f),
+                    onClick = {
+                        temperature = 0.2f
+                        topP = 0.85f
+                        minP = 0.08f
+                        persistSettings()
+                        LogKeeper.log("ChatSettings", "Preset", "Applied 'Precise / Code' preset to $workspaceId")
+                    },
+                    label = { Text("🎯 Precise") }
+                )
+                FilterChip(
+                    selected = (temperature == 0.7f && topP == 0.95f),
+                    onClick = {
+                        temperature = 0.7f
+                        topP = 0.95f
+                        minP = 0.05f
+                        persistSettings()
+                        LogKeeper.log("ChatSettings", "Preset", "Applied 'Balanced' preset to $workspaceId")
+                    },
+                    label = { Text("⚖️ Balanced") }
+                )
+                FilterChip(
+                    selected = (temperature == 0.95f && topP == 0.98f),
+                    onClick = {
+                        temperature = 0.95f
+                        topP = 0.98f
+                        minP = 0.03f
+                        persistSettings()
+                        LogKeeper.log("ChatSettings", "Preset", "Applied 'Creative' preset to $workspaceId")
+                    },
+                    label = { Text("💡 Creative") }
+                )
             }
 
             // System Prompt

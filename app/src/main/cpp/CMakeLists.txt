@@ -7,17 +7,23 @@ if(ANDROID_ABI STREQUAL "arm64-v8a")
     add_compile_options(-O3 -fvectorize -funroll-loops)
 endif()
 
-# Toggle this to ON in GitHub Actions CI to fetch and compile the real llama.cpp
-option(USE_REAL_LLAMA "Fetch and compile real llama.cpp" OFF)
+# Enable real llama.cpp compilation permanently in source control
+option(USE_REAL_LLAMA "Fetch and compile real llama.cpp" ON)
 
 if(USE_REAL_LLAMA)
     add_compile_definitions(USE_REAL_LLAMA)
     
+    set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+
     include(FetchContent)
     FetchContent_Declare(
         llama
         GIT_REPOSITORY https://github.com/ggerganov/llama.cpp.git
-        GIT_TAG master
+        GIT_TAG b4800
+        GIT_SHALLOW TRUE
     )
     FetchContent_MakeAvailable(llama)
     

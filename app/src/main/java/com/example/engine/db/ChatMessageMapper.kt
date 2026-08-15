@@ -28,6 +28,7 @@ fun ChatMessage.toEntity(sessionId: String): ChatMessageEntity {
         providerId = this.providerId,
         editedFilesJson = editedFilesJson.toString(),
         appActionsJson = appActionsJson.toString(),
+        isFolded = this.isFolded,
         timestamp = System.currentTimeMillis()
     )
 
@@ -63,7 +64,8 @@ fun ChatMessageEntity.toDomainModel(): ChatMessage {
         modelName = this.modelName,
         providerId = this.providerId,
         editedFiles = editedFiles,
-        appActions = appActions
+        appActions = appActions,
+        isFolded = this.isFolded
     )
 
 }

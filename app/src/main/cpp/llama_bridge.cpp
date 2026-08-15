@@ -95,17 +95,10 @@ Java_com_example_engine_omniroot_local_LlamaEngine_loadModel(
     llama_backend_init();
 
     llama_model_params model_params = llama_model_default_params();
-    if (useMmap && useMlock) {
-        model_params.load_mode = LLAMA_LOAD_MODE_MMAP_MLOCK;
-    } else if (useMmap) {
-        model_params.load_mode = LLAMA_LOAD_MODE_MMAP;
-    } else if (useMlock) {
-        model_params.load_mode = LLAMA_LOAD_MODE_MLOCK;
-    } else {
-        model_params.load_mode = LLAMA_LOAD_MODE_NONE;
-    }
+    model_params.use_mmap = (useMmap == JNI_TRUE);
+    model_params.use_mlock = (useMlock == JNI_TRUE);
 
-    model = llama_load_model_from_file(nativePath, model_params);
+    model = llama_model_load_from_file(nativePath, model_params);
     
     if (model == nullptr) {
         LOGE("Failed to load model");
@@ -124,7 +117,7 @@ Java_com_example_engine_omniroot_local_LlamaEngine_loadModel(
     ctx_params.n_ubatch = 256;
 
     LOGI("Configured llama_context with %d threads, %d ctx (CPU cores: %d)", optimal_threads, ctx_params.n_ctx, cpu_cores);
-    ctx = llama_new_context_with_model(model, ctx_params);
+    ctx = llama_init_from_model(model, ctx_params);
     
     env->ReleaseStringUTFChars(path, nativePath);
     return ctx != nullptr ? JNI_TRUE : JNI_FALSE;
@@ -160,11 +153,8 @@ Java_com_example_engine_omniroot_local_LlamaEngine_predictStreamNative(
         return;
     }
 
-    // Reset KV cache / memory so the new prompt evaluates from position 0 cleanly
-    llama_memory_t mem = llama_get_memory(ctx);
-    if (mem) {
-        llama_memory_clear(mem, true);
-    }
+    // Reset KV cache so the new prompt evaluates from position 0 cleanly
+    llama_kv_cache_clear(ctx);
 
     const struct llama_vocab * vocab = llama_model_get_vocab(model);
     
@@ -286,7 +276,7 @@ Java_com_example_engine_omniroot_local_LlamaEngine_predict(JNIEnv* env, jobject,
 extern "C" JNIEXPORT void JNICALL
 Java_com_example_engine_omniroot_local_LlamaEngine_unloadModel(JNIEnv* env, jobject) {
     if (ctx) { llama_free(ctx); ctx = nullptr; }
-    if (model) { llama_free_model(model); model = nullptr; }
+    if (model) { llama_model_free(model); model = nullptr; }
     llama_backend_free();
 }
 
