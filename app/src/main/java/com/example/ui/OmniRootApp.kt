@@ -60,8 +60,13 @@ fun OmniRootApp() {
     val navController = rememberNavController()
     var showNewChatDialog by remember { mutableStateOf(false) }
 
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+    val isDrawerGesturesEnabled = (currentRoute == "main")
+
     ModalNavigationDrawer(
         drawerState = drawerState,
+        gesturesEnabled = isDrawerGesturesEnabled,
         drawerContent = {
             GlobalSidebar(
                 onClose = { scope.launch { drawerState.close() } },
@@ -128,7 +133,8 @@ fun OmniRootApp() {
                                 }
                                 ChatScreen(
                                     sessionId = chatSessionId,
-                                    onMenuClick = { scope.launch { drawerState.open() } }
+                                    onMenuClick = { scope.launch { drawerState.open() } },
+                                    onNavigateToThreadSettings = { navController.navigate("thread_settings") }
                                 )
                             }
                             AppTab.CODE -> CodeScreen(
@@ -234,6 +240,11 @@ fun OmniRootApp() {
                 val providerId = backStackEntry.arguments?.getString("providerId") ?: return@composable
                 com.example.ui.settings.omniroot.DirectToKeyWebViewScreen(
                     providerId = providerId,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+            composable("settings/audio") {
+                com.example.ui.settings.AudioSettingsScreen(
                     onNavigateBack = { navController.popBackStack() }
                 )
             }

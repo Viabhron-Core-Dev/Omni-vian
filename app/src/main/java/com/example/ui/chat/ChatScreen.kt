@@ -18,6 +18,13 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.example.utils.VoiceManager
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
@@ -34,6 +41,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -82,7 +90,8 @@ data class ChatMessage(
 @Composable
 fun ChatScreen(
     sessionId: String,
-    onMenuClick: () -> Unit
+    onMenuClick: () -> Unit,
+    onNavigateToThreadSettings: () -> Unit = {}
 ) {
     val aiViewModel: AiManagerViewModel = viewModel()
     val availableModels by aiViewModel.availableModels.collectAsState()
@@ -101,6 +110,32 @@ fun ChatScreen(
     var isGenerating by remember { mutableStateOf(false) }
     var currentJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     var selectedModel by remember { mutableStateOf("Select Model") }
+    
+    val isListening by VoiceManager.isListening.collectAsState()
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            VoiceManager.startListening(
+                context = context,
+                onPartialResult = { partial ->
+                    if (partial.isNotBlank()) {
+                        inputText = if (inputText.isBlank()) partial else "$inputText $partial"
+                    }
+                },
+                onFinalResult = { final ->
+                    if (final.isNotBlank()) {
+                        inputText = if (inputText.isBlank()) final else "$inputText $final"
+                    }
+                },
+                onError = { err ->
+                    Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                }
+            )
+        } else {
+            Toast.makeText(context, "Microphone permission is required for voice input.", Toast.LENGTH_SHORT).show()
+        }
+    }
     
     val chatMessages = remember {
         mutableStateListOf<ChatMessage>()
@@ -263,6 +298,14 @@ fun ChatScreen(
                     DropdownMenuItem(
                         text = { Text("Rename") },
                         onClick = { showMenu = false; showRename = true }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Thread Settings") },
+                        leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                        onClick = { 
+                            showMenu = false
+                            onNavigateToThreadSettings()
+                        }
                     )
                     DropdownMenuItem(
                         text = { Text("AI Token Panel") },
@@ -449,6 +492,26 @@ fun ChatScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         FilledIconButton(
                             onClick = {
+                                if (isListening) {
+                                    VoiceManager.stopListening()
+                                } else {
+                                    audioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                                }
+                            },
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = if (isListening) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+                            ),
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                if (isListening) Icons.Default.MicOff else Icons.Default.Mic,
+                                contentDescription = if (isListening) "Stop Listening" else "Voice Dictation",
+                                tint = if (isListening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        FilledIconButton(
+                            onClick = {
                                 if (isGenerating) {
                                     currentJob?.cancel()
                                     isGenerating = false
@@ -479,7 +542,7 @@ fun ChatScreen(
                                         currentModel = "gemini-1.5-pro-latest"
                                     }
 
-                                    val loadingText = if (currentProvider == "local_gguf") "Waking up $currentModel in RAM..." else "Thinking..."
+                                    val loadingText = "Thinking..."
                                     val generatingMessage = ChatMessage(text = loadingText, role = MessageRole.AI, modelName = currentModel, providerId = currentProvider, isFolded = false)
 
                                     chatMessages.add(generatingMessage)
@@ -876,6 +939,28 @@ fun AiMessage(
                         Icon(Icons.Default.ContentCopy, contentDescription = "Copy", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Copy", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    }
+
+                    // Read Aloud / TTS Action
+                    val isSpeaking by VoiceManager.isSpeaking.collectAsState()
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable {
+                            if (isSpeaking) {
+                                VoiceManager.stopSpeaking()
+                            } else {
+                                VoiceManager.speak(context, message.text)
+                            }
+                        }
+                    ) {
+                        Icon(
+                            if (isSpeaking) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                            contentDescription = if (isSpeaking) "Stop" else "Listen",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(if (isSpeaking) "Stop" else "Listen", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     }
                     
                     // Ratings

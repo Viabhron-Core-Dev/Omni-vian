@@ -46,6 +46,7 @@ fun GlobalSettingsScreen(
                 SettingsItem("MCP", "Manage Context Providers", Icons.Default.AccountTree) { onNavigateTo("settings/mcp") }
                 SettingsItem("Plugins", "User-made plugins", Icons.Default.Extension) { onNavigateTo("settings/plugins") }
                 SettingsItem("Memory Modules", "Manage agent memory types and architectures", Icons.Default.Memory) { onNavigateTo("settings/memory_modules") }
+                SettingsItem("Audio & Speech", "Speech recognition, imported models, and TTS voice", Icons.Default.GraphicEq) { onNavigateTo("settings/audio") }
                 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 SettingsCategory("Integrations")

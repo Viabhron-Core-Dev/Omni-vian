@@ -87,7 +87,7 @@ fun ThreadSettingsScreen(
             // Content
             Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                 when (selectedTab) {
-                    ThreadSettingTab.UNIVERSAL -> UniversalSettingsContent(config) { updatedConfig ->
+                    ThreadSettingTab.UNIVERSAL -> UniversalSettingsContent(workspaceId, config) { updatedConfig ->
                         config = updatedConfig
                         scope.launch {
                             val db = com.example.engine.db.AppDatabase.getDatabase(context)
@@ -107,6 +107,7 @@ fun ThreadSettingsScreen(
 
 @Composable
 fun UniversalSettingsContent(
+    workspaceId: String,
     config: com.example.engine.db.WorkspaceConfigEntity?,
     onConfigChange: (com.example.engine.db.WorkspaceConfigEntity) -> Unit
 ) {
@@ -117,38 +118,113 @@ fun UniversalSettingsContent(
         return
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        OutlinedTextField(
-            value = config.threadName,
-            onValueChange = { onConfigChange(config.copy(threadName = it)) },
-            label = { Text("Thread Name") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(
-            value = config.appType,
-            onValueChange = { onConfigChange(config.copy(appType = it)) },
-            label = { Text("App Type") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(
-            value = config.model,
-            onValueChange = { onConfigChange(config.copy(model = it)) },
-            label = { Text("Model") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(
-            value = config.integrations,
-            onValueChange = { onConfigChange(config.copy(integrations = it)) },
-            label = { Text("Integrations") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(
-            value = config.instructions,
-            onValueChange = { onConfigChange(config.copy(instructions = it)) },
-            label = { Text("System Instructions") },
-            modifier = Modifier.fillMaxWidth().height(150.dp),
-            maxLines = 5
-        )
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    val db = remember { com.example.engine.db.AppDatabase.getDatabase(context) }
+    var unfoldOnScreen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(workspaceId) {
+        val settings = db.chatSettingsDao().getSettings(workspaceId)
+        unfoldOnScreen = settings?.unfoldOnScreen ?: false
+    }
+
+    androidx.compose.foundation.lazy.LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        item {
+            // Fold on Screen Viewport Control Card
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Fold on Screen",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            if (unfoldOnScreen) "Active: Messages automatically unfold as you scroll them into the viewport."
+                            else "Normal: Only the active turn stays open. Earlier turns remain folded.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Switch(
+                        checked = unfoldOnScreen,
+                        onCheckedChange = { isChecked ->
+                            unfoldOnScreen = isChecked
+                            scope.launch {
+                                val currentSettings = db.chatSettingsDao().getSettings(workspaceId)
+                                val updated = currentSettings?.copy(unfoldOnScreen = isChecked)
+                                    ?: com.example.engine.db.ChatSettingsEntity(
+                                        workspaceId = workspaceId,
+                                        unfoldOnScreen = isChecked
+                                    )
+                                db.chatSettingsDao().saveSettings(updated)
+                                com.example.utils.LogKeeper.log("ThreadSettings", "UniversalSync", "Toggled unfoldOnScreen=$isChecked for thread $workspaceId")
+                            }
+                        }
+                    )
+                }
+            }
+        }
+
+        item {
+            OutlinedTextField(
+                value = config.threadName,
+                onValueChange = { onConfigChange(config.copy(threadName = it)) },
+                label = { Text("Thread Name") },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        item {
+            OutlinedTextField(
+                value = config.appType,
+                onValueChange = { onConfigChange(config.copy(appType = it)) },
+                label = { Text("App Type") },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        item {
+            OutlinedTextField(
+                value = config.model,
+                onValueChange = { onConfigChange(config.copy(model = it)) },
+                label = { Text("Model") },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        item {
+            OutlinedTextField(
+                value = config.integrations,
+                onValueChange = { onConfigChange(config.copy(integrations = it)) },
+                label = { Text("Integrations") },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        item {
+            OutlinedTextField(
+                value = config.instructions,
+                onValueChange = { onConfigChange(config.copy(instructions = it)) },
+                label = { Text("System Instructions") },
+                modifier = Modifier.fillMaxWidth().height(150.dp),
+                maxLines = 5
+            )
+        }
     }
 }
 
